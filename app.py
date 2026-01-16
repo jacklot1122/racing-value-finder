@@ -331,12 +331,31 @@ def scrape_todays_races():
                     scrape_status['estimated_time_remaining'] = f"~{remaining * 20} seconds"
                     scrape_status['current_step'] = f'Scraping {venue} ({idx + 1}/{len(meeting_list)})...'
                     
-                    # Emit update
-                    socketio.emit('scrape_progress', scrape_status)
+                    # Emit update (with error handling)
+                    try:
+                        socketio.emit('scrape_progress', scrape_status)
+                    except:
+                        pass
                     print(f"[{idx + 1}/{len(meeting_list)}] Scraping {venue}...")
                     
                     # Get races for this meeting
                     meeting_races = [r for r in all_race_urls if r['meeting_key'] == meeting_key]
+                    
+                    # Check first race page for abandoned status
+                    if meeting_races:
+                        first_race = meeting_races[0]
+                        try:
+                            page.goto(first_race['url'], timeout=30000)
+                            time.sleep(1)
+                            page_text = page.inner_text('body').upper()
+                            
+                            # Check for abandoned indicators
+                            if 'ABANDONED' in page_text or 'MEETING ABANDONED' in page_text:
+                                abandoned_meetings.add(meeting_key)
+                                print(f"  → Meeting ABANDONED - skipping all races")
+                                continue
+                        except Exception as e:
+                            print(f"  → Error checking meeting status: {e}")
                     
                     for race_info in meeting_races:
                         try:
