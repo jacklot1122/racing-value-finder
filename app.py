@@ -1152,11 +1152,26 @@ def handle_subscribe_arb(data):
 scheduler.start()
 
 # Load data on module import for production
-load_existing_data()
+folder = get_data_folder()
+odds_file = os.path.join(folder, "odds_data.json")
 
-# If no data exists, trigger initial scrape
-if not race_data['odds']:
-    print("No data found - triggering initial scrape...")
+print(f"Checking for existing data in: {folder}")
+print(f"  /data exists: {os.path.exists('/data')}")
+print(f"  Folder exists: {os.path.exists(folder)}")
+print(f"  Odds file exists: {os.path.exists(odds_file)}")
+
+if os.path.exists(odds_file):
+    file_size = os.path.getsize(odds_file)
+    print(f"  Odds file size: {file_size} bytes")
+    if file_size > 100:  # Valid file should be more than 100 bytes
+        print("✓ Found existing data - loading...")
+        load_existing_data()
+        print(f"  Loaded {len(race_data['odds'])} races with odds")
+    else:
+        print("✗ Odds file too small, will re-scrape...")
+        threading.Thread(target=daily_refresh, daemon=True).start()
+else:
+    print("✗ No odds data found - triggering initial scrape...")
     threading.Thread(target=daily_refresh, daemon=True).start()
 
 
