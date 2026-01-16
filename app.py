@@ -344,73 +344,283 @@ def download_form_guides():
             browser.close()
             print(f"\n✓ Downloaded {downloaded} form guides, {skipped} already existed")
             
-            # Analyze PDFs if pdfplumber is available
+            # Analyze PDFs using the full FormAnalyzer
             if PDF_ANALYSIS_AVAILABLE and (downloaded > 0 or skipped > 0):
-                analyze_form_pdfs(pdf_folder, folder)
+                analyzer = FormAnalyzer(pdf_folder, folder)
+                analyzer.analyze_all_pdfs()
                 
     except Exception as e:
         print(f"Error downloading form guides: {e}")
         import traceback
         traceback.print_exc()
-        import traceback
-        traceback.print_exc()
 
 
-def analyze_form_pdfs(pdf_folder, output_folder):
-    """Analyze downloaded PDF form guides"""
-    print("\nAnalyzing form guides...")
+class FormAnalyzer:
+    """Analyzes horse racing form from PDF data - Full version from racingwebsite.py"""
     
-    pdf_files = glob.glob(os.path.join(pdf_folder, "**", "*.pdf"), recursive=True)
+    def __init__(self, pdf_folder, output_folder):
+        self.pdf_folder = pdf_folder
+        self.output_folder = output_folder
+        self.all_races = []
     
-    if not pdf_files:
-        print("No PDFs found to analyze")
-        return
+    def is_australian_venue(self, venue_folder):
+        """Check if folder is for an Australian venue"""
+        venue_lower = venue_folder.lower()
+        
+        # Reject any with international suffixes
+        international_suffixes = [
+            '_nz', '_us', '_uk', '_za', '_fr', '_jp', '_tr', '_hk', '_sg',
+            '_ie', '_ae', '_kr', '_in', '_my', '_ph', '_cl', '_ar', '_br'
+        ]
+        
+        for suffix in international_suffixes:
+            if venue_lower.endswith(suffix):
+                return False
+        
+        # Known international venue names
+        international_names = [
+            'cagnessurmer', 'pau_fr', 'nagoya_jp', 'fairview_za', 
+            'vaal_za', 'sha_tin', 'happy_valley', 'meydan', 'kranji', 
+            'longchamp', 'chantilly', 'deauville', 'newmarket_uk', 
+            'te_rapa_nz', 'trentham', 'ellerslie', 'aqueduct_us', 'gulfstream'
+        ]
+        
+        for name in international_names:
+            if name in venue_lower:
+                return False
+        
+        return True
     
-    form_data = []
-    
-    for pdf_path in pdf_files:
+    def extract_text_from_pdf(self, pdf_path):
+        """Extract all text from a PDF file"""
+        text = ""
         try:
+            with pdfplumber.open(pdf_path) as pdf:
+                for page in pdf.pages:
+                    text += page.extract_text() or ""
+                    text += "\n\n"
+        except Exception as e:
+            print(f"  Error reading PDF: {e}")
+        return text
+    
+    def parse_race_data(self, text, venue):
+        """Parse race and horse data from extracted text"""
+        races = []
+        
+        # Split by race markers - look for "Race X" patterns
+        race_sections = re.split(r'(?=Race\s+\d+\s)', text, flags=re.IGNORECASE)
+        
+        for section in race_sections:
+            if not section.strip():
+                continue
+                
+            # Try to extract race number and name
+            race_match = re.match(r'Race\s+(\d+)\s*[-–]?\s*(.+?)(?:\n|$)', section, re.IGNORECASE)
+            if not race_match:
+                continue
+                
+            race_num = race_match.group(1)
+            race_name = race_match.group(2).strip()[:50]
+            
+            race_data = {
+                'venue': venue,
+                'race_number': int(race_num),
+                'race_name': race_name,
+                'horses': []
+            }
+            
+            lines = section.split('\n')
+            for line in lines:
+                # Look for barrier/horse number at start of line
+                entry_match = re.match(r'^(\d{1,2})\s+([A-Z][A-Za-z\'\-\s]{2,25})', line)
+                if entry_match:
+                    barrier = entry_match.group(1)
+                    horse_name = entry_match.group(2).strip()
+                    
+                    # Extract form figures (last starts: 1,2,3,4,5,6,7,8,9,0,x)
+                    form_match = re.search(r'([1-9x0]{1,10})\s*$', line)
+                    form = form_match.group(1) if form_match else ""
+                    
+                    # Try to find weight
+                    weight_match = re.search(r'(\d{2,3}\.?\d?)\s*kg', line, re.IGNORECASE)
+                    weight = weight_match.group(1) if weight_match else ""
+                    
+                    horse_data = {
+                        'barrier': int(barrier),
+                        'name': horse_name,
+                        'form': form,
+                        'weight': weight,
+                        'form_score': self.calculate_form_score(form)
+                    }
+                    race_data['horses'].append(horse_data)
+            
+            if race_data['horses']:
+                races.append(race_data)
+        
+        return races
+    
+    def calculate_form_score(self, form):
+        """Calculate a score based on recent form figures"""
+        if not form:
+            return 0
+        
+        score = 0
+        weights = [5, 4, 3, 2, 1]  # Most recent runs weighted higher
+        
+        for i, char in enumerate(form[:5]):  # Last 5 starts
+            weight = weights[i] if i < len(weights) else 1
+            if char == '1':
+                score += 10 * weight
+            elif char == '2':
+                score += 7 * weight
+            elif char == '3':
+                score += 5 * weight
+            elif char == '4':
+                score += 3 * weight
+            elif char == '5':
+                score += 2 * weight
+            elif char in '6789':
+                score += 1 * weight
+            elif char in 'x0':
+                score -= 2 * weight
+        
+        return score
+    
+    def get_rating(self, score):
+        """Convert score to star rating"""
+        if score >= 80:
+            return "⭐⭐⭐⭐⭐"
+        elif score >= 60:
+            return "⭐⭐⭐⭐"
+        elif score >= 40:
+            return "⭐⭐⭐"
+        elif score >= 20:
+            return "⭐⭐"
+        elif score >= 0:
+            return "⭐"
+        else:
+            return "❌"
+    
+    def analyze_all_pdfs(self):
+        """Analyze all PDFs in the download folder"""
+        print("\n" + "=" * 60)
+        print("FORM ANALYSIS")
+        print("=" * 60)
+        
+        # Find all PDF files
+        pdf_files = glob.glob(os.path.join(self.pdf_folder, "**", "*.pdf"), recursive=True)
+        
+        if not pdf_files:
+            print("No PDF files found to analyze.")
+            return
+        
+        # Filter to only AU venues
+        au_pdfs = []
+        skipped_intl = 0
+        for pdf_path in pdf_files:
+            venue_folder = os.path.basename(os.path.dirname(pdf_path))
+            if self.is_australian_venue(venue_folder):
+                au_pdfs.append(pdf_path)
+            else:
+                skipped_intl += 1
+        
+        if skipped_intl > 0:
+            print(f"\n→ Skipping {skipped_intl} international form guides")
+        
+        if not au_pdfs:
+            print("No Australian PDF files found to analyze.")
+            return
+        
+        print(f"→ Analyzing {len(au_pdfs)} Australian form guides...\n")
+        
+        for pdf_path in au_pdfs:
             venue_folder = os.path.basename(os.path.dirname(pdf_path))
             venue = venue_folder.split('_', 1)[1] if '_' in venue_folder else venue_folder
             venue = venue.replace('_', ' ').title()
             
-            with pdfplumber.open(pdf_path) as pdf:
-                for page_num, page in enumerate(pdf.pages[:10], 1):
-                    text = page.extract_text() or ""
-                    
-                    # Simple form parsing - extract horse names and form
-                    lines = text.split('\n')
-                    for line in lines:
-                        # Look for form pattern like "12. Horse Name (5) x2341"
-                        match = re.search(r'(\d+)\.\s+([A-Za-z\s]+)\s*\((\d+)\)\s*([x\d]+)?', line)
-                        if match:
-                            horse_num = match.group(1)
-                            horse_name = match.group(2).strip()
-                            barrier = match.group(3)
-                            form = match.group(4) or ""
-                            
-                            form_data.append({
-                                'Venue': venue,
-                                'Race': page_num,
-                                'Horse': horse_name,
-                                'Number': horse_num,
-                                'Barrier': barrier,
-                                'Form': form,
-                                'Form Score': calculate_form_score(form)
-                            })
-                            
-        except Exception as e:
-            print(f"  Error analyzing {pdf_path}: {e}")
+            print(f"📋 {venue}")
+            
+            text = self.extract_text_from_pdf(pdf_path)
+            races = self.parse_race_data(text, venue)
+            
+            if races:
+                self.all_races.extend(races)
+                print(f"   Found {len(races)} races with {sum(len(r['horses']) for r in races)} horses")
+            else:
+                print(f"   Could not parse race data")
+        
+        # Generate analysis report
+        self.generate_report()
+        
+        # Save detailed report
+        self.save_detailed_report()
     
-    # Save form analysis
-    if form_data:
-        import csv
-        form_file = os.path.join(output_folder, "form_analysis.csv")
-        with open(form_file, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=['Venue', 'Race', 'Horse', 'Number', 'Barrier', 'Form', 'Form Score'])
-            writer.writeheader()
-            writer.writerows(form_data)
-        print(f"✓ Saved form analysis for {len(form_data)} horses")
+    def generate_report(self):
+        """Generate form analysis report"""
+        if not self.all_races:
+            print("\nNo race data to analyze.")
+            return
+        
+        print("\n" + "=" * 60)
+        print("TOP PICKS BY FORM")
+        print("=" * 60)
+        
+        for race in self.all_races:
+            if not race['horses']:
+                continue
+            
+            # Sort horses by form score
+            sorted_horses = sorted(race['horses'], key=lambda x: x['form_score'], reverse=True)
+            
+            print(f"\n🏇 {race['venue']} - Race {race['race_number']}: {race['race_name']}")
+            print("-" * 50)
+            
+            # Show top 3 picks
+            print("  TOP PICKS:")
+            for i, horse in enumerate(sorted_horses[:3], 1):
+                rating = self.get_rating(horse['form_score'])
+                form_display = horse['form'] if horse['form'] else "N/A"
+                print(f"    {i}. {horse['name']:<20} Form: {form_display:<10} Score: {horse['form_score']:>3} {rating}")
+            
+            # Show horses to avoid
+            if len(sorted_horses) > 5:
+                print("  AVOID:")
+                for horse in sorted_horses[-2:]:
+                    rating = self.get_rating(horse['form_score'])
+                    form_display = horse['form'] if horse['form'] else "N/A"
+                    print(f"    ⚠ {horse['name']:<20} Form: {form_display:<10} Score: {horse['form_score']:>3} {rating}")
+    
+    def save_detailed_report(self):
+        """Save detailed analysis to CSV file"""
+        all_horses = []
+        for race in self.all_races:
+            for horse in race['horses']:
+                all_horses.append({
+                    'Venue': race['venue'],
+                    'Race': race['race_number'],
+                    'Race Name': race['race_name'],
+                    'Barrier': horse['barrier'],
+                    'Horse': horse['name'],
+                    'Form': horse['form'],
+                    'Weight': horse.get('weight', ''),
+                    'Form Score': horse['form_score'],
+                    'Rating': self.get_rating(horse['form_score'])
+                })
+        
+        if all_horses:
+            import csv
+            csv_path = os.path.join(self.output_folder, "form_analysis.csv")
+            with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=all_horses[0].keys())
+                writer.writeheader()
+                writer.writerows(all_horses)
+            print(f"\n📊 Detailed analysis saved to: form_analysis.csv ({len(all_horses)} horses)")
+            
+            # Also save races to JSON for the web app
+            races_json_path = os.path.join(self.output_folder, "races_analysis.json")
+            with open(races_json_path, 'w', encoding='utf-8') as f:
+                json.dump(self.all_races, f, indent=2)
+            print(f"📊 Race data saved to: races_analysis.json")
 
 
 def calculate_form_score(form_string):
@@ -788,30 +998,40 @@ def load_existing_data():
     if os.path.exists(odds_file):
         with open(odds_file, 'r', encoding='utf-8') as f:
             race_data['odds'] = json.load(f)
+        print(f"  Loaded odds for {len(race_data['odds'])} races")
     
-    # Load form analysis
-    form_file = os.path.join(folder, "form_analysis.csv")
-    if os.path.exists(form_file):
-        import csv
-        races_dict = {}
-        with open(form_file, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                key = (row['Venue'], int(row['Race']))
-                if key not in races_dict:
-                    races_dict[key] = {
-                        'venue': row['Venue'],
-                        'race_number': int(row['Race']),
-                        'race_name': row.get('Race Name', ''),
-                        'horses': []
-                    }
-                races_dict[key]['horses'].append({
-                    'barrier': int(row.get('Barrier', 0)),
-                    'name': row['Horse'],
-                    'form': row.get('Form', ''),
-                    'form_score': float(row.get('Form Score', 0))
-                })
-        race_data['races'] = list(races_dict.values())
+    # Load race analysis JSON (preferred - more complete)
+    races_json = os.path.join(folder, "races_analysis.json")
+    if os.path.exists(races_json):
+        with open(races_json, 'r', encoding='utf-8') as f:
+            race_data['races'] = json.load(f)
+        print(f"  Loaded {len(race_data['races'])} races from JSON")
+    else:
+        # Fallback to CSV form analysis
+        form_file = os.path.join(folder, "form_analysis.csv")
+        if os.path.exists(form_file):
+            import csv
+            races_dict = {}
+            with open(form_file, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    key = (row['Venue'], int(row['Race']))
+                    if key not in races_dict:
+                        races_dict[key] = {
+                            'venue': row['Venue'],
+                            'race_number': int(row['Race']),
+                            'race_name': row.get('Race Name', ''),
+                            'horses': []
+                        }
+                    races_dict[key]['horses'].append({
+                        'barrier': int(row.get('Barrier', 0)),
+                        'name': row['Horse'],
+                        'form': row.get('Form', ''),
+                        'form_score': float(row.get('Form Score', 0)),
+                        'rating': row.get('Rating', '')
+                    })
+            race_data['races'] = list(races_dict.values())
+            print(f"  Loaded {len(race_data['races'])} races from CSV")
     
     race_data['last_updated'] = datetime.now().strftime("%H:%M:%S")
     
@@ -1172,6 +1392,75 @@ def get_data():
         'last_updated': race_data['last_updated'],
         'total_races': len(race_data['odds'])
     })
+
+
+@app.route('/api/form_analysis')
+def get_form_analysis():
+    """Get detailed form analysis for all races"""
+    form_analysis = []
+    
+    for race in race_data['races']:
+        if not race.get('horses'):
+            continue
+        
+        # Sort horses by form score
+        sorted_horses = sorted(race['horses'], key=lambda x: x.get('form_score', 0), reverse=True)
+        
+        race_analysis = {
+            'venue': race['venue'],
+            'race_number': race['race_number'],
+            'race_name': race.get('race_name', ''),
+            'top_picks': [],
+            'avoid': [],
+            'all_horses': sorted_horses
+        }
+        
+        # Top 3 picks
+        for i, h in enumerate(sorted_horses[:3]):
+            score = h.get('form_score', 0)
+            race_analysis['top_picks'].append({
+                'rank': i + 1,
+                'name': h['name'],
+                'form': h.get('form', ''),
+                'form_score': score,
+                'rating': get_star_rating(score),
+                'barrier': h.get('barrier', 0)
+            })
+        
+        # Bottom 2 to avoid
+        if len(sorted_horses) > 5:
+            for h in sorted_horses[-2:]:
+                score = h.get('form_score', 0)
+                race_analysis['avoid'].append({
+                    'name': h['name'],
+                    'form': h.get('form', ''),
+                    'form_score': score,
+                    'rating': get_star_rating(score)
+                })
+        
+        form_analysis.append(race_analysis)
+    
+    return jsonify({
+        'form_analysis': form_analysis,
+        'total_races': len(form_analysis),
+        'last_updated': race_data['last_updated']
+    })
+
+
+def get_star_rating(score):
+    """Convert form score to star rating"""
+    if score >= 80:
+        return "⭐⭐⭐⭐⭐"
+    elif score >= 60:
+        return "⭐⭐⭐⭐"
+    elif score >= 40:
+        return "⭐⭐⭐"
+    elif score >= 20:
+        return "⭐⭐"
+    elif score >= 0:
+        return "⭐"
+    else:
+        return "❌"
 
 
 @app.route('/api/refresh')
