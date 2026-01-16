@@ -225,18 +225,28 @@ def download_form_guides():
         with sync_playwright() as p:
             browser = p.firefox.launch(headless=True)
             context = browser.new_context(
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0'
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0',
+                viewport={'width': 1920, 'height': 1080}
             )
             page = context.new_page()
             
             # Go to punters.com.au form guide
-            page.goto("https://www.punters.com.au/form-guide/", timeout=30000)
+            print("→ Loading form guide page...")
+            page.goto("https://www.punters.com.au/form-guide/", timeout=60000, wait_until='domcontentloaded')
             time.sleep(3)
+            
+            # Check for Cloudflare
+            page_content = page.content()
+            if 'checking your browser' in page_content.lower() or len(page_content) < 5000:
+                print("→ Cloudflare check detected, waiting...")
+                time.sleep(5)
             
             # Wait for content
             try:
                 page.wait_for_selector('a[href*="/form-guide/horses/"]', timeout=15000)
+                print("→ Found race links")
             except:
+                print("→ Waiting for content...")
                 time.sleep(5)
             
             # Get all race links
@@ -247,7 +257,7 @@ def download_form_guides():
             for card in race_cards:
                 href = card.get_attribute('href')
                 if href and '/form-guide/horses/' in href:
-                    pattern = r'/form-guide/horses/([^/]+)/([^/]+)/'
+                    pattern = r'/form-guide/horses/([^/]+)/race-\d+/'
                     match = re.search(pattern, href)
                     
                     if match:
@@ -261,63 +271,87 @@ def download_form_guides():
                             if is_australian_track(venue):
                                 meeting_key = f"{date}_{venue.replace(' ', '_')}"
                                 if meeting_key not in meetings:
-                                    base_url = f"https://www.punters.com.au/form-guide/horses/{venue_date}/"
+                                    # Use race-1 URL to access the meeting
+                                    race_url = f"https://www.punters.com.au/form-guide/horses/{venue_date}/race-1/"
                                     meetings[meeting_key] = {
                                         'venue': venue,
                                         'date': date,
-                                        'url': base_url
+                                        'url': race_url,
+                                        'venue_date': venue_date
                                     }
             
             print(f"Found {len(meetings)} Australian meetings")
             
             downloaded = 0
+            skipped = 0
+            
             for meeting_key, info in meetings.items():
                 try:
                     venue = info['venue']
+                    venue_folder = os.path.join(pdf_folder, meeting_key)
+                    pdf_path = os.path.join(venue_folder, f"{venue}_full_form.pdf")
+                    
+                    # Check if already downloaded
+                    if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 1000:
+                        print(f"  ✓ {venue} - already downloaded")
+                        skipped += 1
+                        continue
+                    
                     print(f"  Downloading form for {venue}...")
                     
-                    # Go to meeting page and find PDF link
+                    # Go to race page
                     page.goto(info['url'], timeout=30000)
                     time.sleep(2)
                     
-                    # Look for PDF download link
-                    pdf_link = page.query_selector('a[href*=".pdf"]')
-                    if not pdf_link:
-                        pdf_link = page.query_selector('a:has-text("Full Form")')
-                    if not pdf_link:
-                        pdf_link = page.query_selector('a:has-text("Download")')
+                    # Check if abandoned
+                    page_text = page.inner_text('body').upper()
+                    if 'ABANDONED' in page_text or 'MEETING ABANDONED' in page_text:
+                        print(f"    ⚠ ABANDONED - Skipping")
+                        continue
+                    
+                    # Click the "Download Form" button to reveal PDF links
+                    download_btn = page.query_selector('button[data-analytics="Form Guide : Form : Download Form"]')
+                    if download_btn:
+                        download_btn.click()
+                        time.sleep(1)
+                    
+                    # Find the Full Page A4 PDF link (from puntcdn.com)
+                    pdf_link = page.query_selector('a[href*="puntcdn.com/form-guides/"][href$=".pdf"]')
                     
                     if pdf_link:
                         pdf_url = pdf_link.get_attribute('href')
-                        if pdf_url and not pdf_url.startswith('http'):
-                            pdf_url = f"https://www.punters.com.au{pdf_url}"
+                        print(f"    → PDF: {pdf_url[:60]}...")
                         
                         # Download PDF
-                        venue_folder = os.path.join(pdf_folder, meeting_key)
                         os.makedirs(venue_folder, exist_ok=True)
-                        pdf_path = os.path.join(venue_folder, f"{venue}_full_form.pdf")
                         
                         response = requests.get(pdf_url, timeout=30)
-                        if response.status_code == 200:
+                        if response.status_code == 200 and len(response.content) > 1000:
                             with open(pdf_path, 'wb') as f:
                                 f.write(response.content)
-                            print(f"    ✓ Downloaded {venue} form guide")
+                            print(f"    ✓ Downloaded {venue} form guide ({len(response.content)} bytes)")
                             downloaded += 1
+                        else:
+                            print(f"    ✗ Invalid PDF response")
                     else:
                         print(f"    → No PDF link found for {venue}")
                         
                 except Exception as e:
                     print(f"    ✗ Error downloading {info['venue']}: {e}")
+                
+                time.sleep(0.5)  # Be polite to the server
             
             browser.close()
-            print(f"Downloaded {downloaded} form guides")
+            print(f"\n✓ Downloaded {downloaded} form guides, {skipped} already existed")
             
             # Analyze PDFs if pdfplumber is available
-            if PDF_ANALYSIS_AVAILABLE and downloaded > 0:
+            if PDF_ANALYSIS_AVAILABLE and (downloaded > 0 or skipped > 0):
                 analyze_form_pdfs(pdf_folder, folder)
                 
     except Exception as e:
         print(f"Error downloading form guides: {e}")
+        import traceback
+        traceback.print_exc()
         import traceback
         traceback.print_exc()
 
