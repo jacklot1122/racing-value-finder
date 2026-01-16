@@ -107,18 +107,22 @@ def daily_refresh():
         
         scrape_status['current_step'] = 'Scraping race meetings...'
         scrape_status['progress'] = 10
+        socketio.emit('scrape_progress', scrape_status)
         
         # Scrape new data for today
         scrape_todays_races()
         
         scrape_status['current_step'] = 'Analyzing data...'
         scrape_status['progress'] = 90
+        socketio.emit('scrape_progress', scrape_status)
         
         # Reload data into memory
         load_existing_data()
         
         scrape_status['current_step'] = 'Complete!'
         scrape_status['progress'] = 100
+        scrape_status['is_scraping'] = False
+        socketio.emit('scrape_progress', scrape_status)
         
         # Notify connected clients
         socketio.emit('data_refreshed', {'time': get_sydney_time().strftime("%H:%M:%S")})
@@ -127,6 +131,8 @@ def daily_refresh():
         
     except Exception as e:
         scrape_status['error'] = str(e)
+        scrape_status['is_scraping'] = False
+        socketio.emit('scrape_progress', scrape_status)
         print(f"[{get_sydney_time()}] Error during refresh: {e}")
     
     finally:
@@ -176,25 +182,33 @@ def scrape_todays_races():
             
             for idx, meeting_url in enumerate(meetings[:10]):  # Limit to first 10 meetings
                 try:
-                    scrape_status['meetings_done'] = idx
-                    scrape_status['current_step'] = f'Scraping meeting {idx + 1} of {scrape_status["total_meetings"]}...'
-                    scrape_status['progress'] = 10 + int((idx / scrape_status['total_meetings']) * 70)
+                    scrape_status['meetings_done'] = idx + 1
+                    scrape_status['progress'] = 10 + int(((idx + 1) / scrape_status['total_meetings']) * 70)
                     
                     # Estimate time remaining (assume ~30 sec per meeting)
                     remaining_meetings = scrape_status['total_meetings'] - idx
-                    scrape_status['estimated_time_remaining'] = f"{remaining_meetings * 30} seconds"
+                    scrape_status['estimated_time_remaining'] = f"~{remaining_meetings * 30} seconds"
                     
                     if not meeting_url.startswith('http'):
                         meeting_url = f"https://www.punters.com.au{meeting_url}"
                     
-                    page.goto(meeting_url, timeout=30000)
-                    time.sleep(2)
-                    
-                    # Extract venue name from URL
-                    venue_match = re.search(r'/form-guide/([^/]+)/', meeting_url)
-                    venue = venue_match.group(1).replace('-', ' ').title() if venue_match else 'Unknown'
+                    # Extract venue name from URL BEFORE navigating
+                    venue = 'Unknown'
+                    # Pattern: /form-guide/venue-name/ or /form-guide/venue-name
+                    parts = meeting_url.split('/form-guide/')
+                    if len(parts) > 1:
+                        venue_part = parts[1].split('/')[0]
+                        venue = venue_part.replace('-', ' ').title()
                     
                     scrape_status['current_step'] = f'Scraping {venue} ({idx + 1}/{scrape_status["total_meetings"]})...'
+                    
+                    # Emit update to connected clients
+                    socketio.emit('scrape_progress', scrape_status)
+                    
+                    print(f"[{idx + 1}/{scrape_status['total_meetings']}] Scraping {venue}...")
+                    
+                    page.goto(meeting_url, timeout=30000)
+                    time.sleep(2)
                     
                     # Find race links - collect URLs first
                     race_urls = []

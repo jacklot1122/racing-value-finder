@@ -9,13 +9,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-dark: #0f1419;
-            --bg-card: #1c2128;
-            --bg-card-hover: #252d38;
-            --bg-surface: #161b22;
+            --bg-dark: #0d1117;
+            --bg-card: #161b22;
+            --bg-card-hover: #21262d;
+            --bg-surface: #0d1117;
             --text-primary: #f0f6fc;
-            --text-secondary: #8b949e;
-            --text-muted: #6e7681;
+            --text-secondary: #c9d1d9;
+            --text-muted: #8b949e;
             --accent-green: #3fb950;
             --accent-red: #f85149;
             --accent-blue: #58a6ff;
@@ -94,17 +94,22 @@
         }
         
         .card:hover {
-            transform: translateY(-4px);
+            transform: translateY(-2px);
             box-shadow: var(--shadow-lg);
-            border-color: var(--accent-blue);
+            border-color: rgba(88, 166, 255, 0.5);
         }
         
         .card-header {
-            background: var(--bg-surface);
+            background: linear-gradient(135deg, rgba(88, 166, 255, 0.1) 0%, rgba(163, 113, 247, 0.1) 100%);
             border-bottom: 1px solid var(--border-color);
-            font-weight: 600;
+            font-weight: 700;
             padding: 1rem 1.25rem;
-            font-size: 0.95rem;
+            font-size: 1rem;
+            color: var(--text-primary);
+        }
+        
+        .card-header i {
+            opacity: 1;
         }
         
         .card-body {
@@ -513,21 +518,27 @@
         .empty-state {
             text-align: center;
             padding: 3rem 2rem;
+            background: rgba(48, 54, 61, 0.3);
+            border-radius: 12px;
+            border: 1px dashed var(--border-color);
         }
         
         .empty-state i {
             font-size: 3rem;
             margin-bottom: 1rem;
-            opacity: 0.5;
+            color: var(--accent-blue);
+            opacity: 0.7;
         }
         
         .empty-state p {
-            color: var(--text-secondary);
+            color: var(--text-primary);
+            font-size: 1.1rem;
+            font-weight: 500;
             margin-bottom: 0.5rem;
         }
         
         .empty-state small {
-            color: var(--text-muted);
+            color: var(--text-secondary);
         }
         
         /* Scraping Status Banner */
@@ -829,6 +840,33 @@
                 showToast('Data Updated', 'Fresh race data loaded', 'success');
                 loadData();
             });
+            
+            // Listen for real-time scrape progress updates
+            socket.on('scrape_progress', function(status) {
+                updateScrapeUI(status);
+            });
+        }
+        
+        function updateScrapeUI(status) {
+            const banner = document.getElementById('scrapingBanner');
+            const refreshBtn = document.getElementById('refreshBtn');
+            
+            if (status.is_scraping) {
+                banner.classList.remove('hidden');
+                refreshBtn.disabled = true;
+                refreshBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Scraping...';
+                
+                document.getElementById('scrapingStep').textContent = status.current_step || 'Scraping data...';
+                document.getElementById('scrapingTime').textContent = status.estimated_time_remaining 
+                    ? `Estimated time remaining: ${status.estimated_time_remaining}` 
+                    : 'Please wait...';
+                document.getElementById('scrapingProgressBar').style.width = `${status.progress || 0}%`;
+                document.getElementById('scrapingPercent').textContent = `${status.progress || 0}%`;
+            } else {
+                banner.classList.add('hidden');
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> Refresh';
+            }
         }
         
         async function loadData() {
@@ -858,46 +896,12 @@
             }
         }
         
-        // Check scraping status periodically
-        let scrapeStatusInterval = null;
-        
+        // Check scraping status (called on page load and after starting scrape)
         async function checkScrapeStatus() {
             try {
                 const response = await fetch('/api/scrape_status');
                 const status = await response.json();
-                
-                const banner = document.getElementById('scrapingBanner');
-                const refreshBtn = document.getElementById('refreshBtn');
-                
-                if (status.is_scraping) {
-                    banner.classList.remove('hidden');
-                    refreshBtn.disabled = true;
-                    refreshBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Scraping...';
-                    
-                    document.getElementById('scrapingStep').textContent = status.current_step || 'Scraping data...';
-                    document.getElementById('scrapingTime').textContent = status.estimated_time_remaining 
-                        ? `Estimated time remaining: ${status.estimated_time_remaining}` 
-                        : 'Please wait...';
-                    document.getElementById('scrapingProgressBar').style.width = `${status.progress || 0}%`;
-                    document.getElementById('scrapingPercent').textContent = `${status.progress || 0}%`;
-                    
-                    // Start polling if not already
-                    if (!scrapeStatusInterval) {
-                        scrapeStatusInterval = setInterval(checkScrapeStatus, 2000);
-                    }
-                } else {
-                    banner.classList.add('hidden');
-                    refreshBtn.disabled = false;
-                    refreshBtn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> Refresh';
-                    
-                    // Stop polling
-                    if (scrapeStatusInterval) {
-                        clearInterval(scrapeStatusInterval);
-                        scrapeStatusInterval = null;
-                        // Reload data after scraping completes
-                        await loadData();
-                    }
-                }
+                updateScrapeUI(status);
             } catch (error) {
                 console.error('Error checking scrape status:', error);
             }
@@ -907,8 +911,8 @@
             showToast('Refreshing', 'Starting data scrape...', 'info');
             try {
                 await fetch('/api/scrape_now', { method: 'POST' });
-                // Start checking status
-                checkScrapeStatus();
+                // Initial status check - WebSocket will handle real-time updates
+                setTimeout(checkScrapeStatus, 500);
             } catch (error) {
                 showToast('Error', 'Failed to start scrape', 'danger');
             }
