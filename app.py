@@ -172,120 +172,119 @@ def scrape_todays_races():
             
             scrape_status['current_step'] = 'Loading racing page...'
             
-            # Go to punters.com.au to get today's meetings
-            page.goto("https://www.punters.com.au/racing/", timeout=30000)
+            # Go to punters.com.au thoroughbred racing page
+            page.goto("https://www.punters.com.au/form-guide/", timeout=30000)
             time.sleep(3)
             
-            # Get all meeting links - collect URLs first before navigating
-            meetings = []
-            meeting_links = page.query_selector_all('a[href*="/form-guide/"]')
+            # Wait for race cards to load
+            try:
+                page.wait_for_selector('a[href*="/form-guide/horses/"]', timeout=15000)
+                print("→ Found race links")
+            except:
+                print("→ Waiting for content...")
+                time.sleep(5)
             
-            for link in meeting_links:
-                try:
-                    href = link.get_attribute('href')
-                    if href and '/form-guide/' in href and href not in meetings:
-                        meetings.append(href)
-                except:
-                    continue
+            # Get all race card links - use the same selector as racingwebsite.py
+            race_cards = page.query_selector_all('a.event-card[href*="/form-guide/"]')
+            if not race_cards:
+                race_cards = page.query_selector_all('a[href*="/form-guide/horses/"]')
             
-            print(f"Found {len(meetings)} meetings to scrape")
-            print(f"Meeting URLs: {meetings[:5]}")  # Debug: show URLs
-            scrape_status['total_meetings'] = min(len(meetings), 10)
+            # Extract unique meetings (group by venue)
+            meetings = {}
+            all_race_urls = []
+            
+            for card in race_cards:
+                href = card.get_attribute('href')
+                if href and '/form-guide/horses/' in href:
+                    full_url = f"https://www.punters.com.au{href}" if not href.startswith('http') else href
+                    full_url = full_url.split('#')[0]
+                    
+                    # Extract venue and date using pattern from racingwebsite.py
+                    # Example: /form-guide/horses/canterbury-20260116/race-1/
+                    pattern = r'/form-guide/horses/([^/]+)/([^/]+)/'
+                    match = re.search(pattern, href)
+                    
+                    if match:
+                        venue_date = match.group(1)
+                        race_part = match.group(2)
+                        
+                        # Extract date from venue string (last 8 digits)
+                        date_match = re.search(r'(\d{8})$', venue_date)
+                        if date_match:
+                            date = date_match.group(1)
+                            venue = venue_date.replace(f'-{date}', '').replace('-', ' ').title()
+                        else:
+                            date = get_sydney_time().strftime("%Y%m%d")
+                            venue = venue_date.replace('-', ' ').title()
+                        
+                        # Extract race number
+                        race_match = re.search(r'race-(\d+)', race_part)
+                        race_num = int(race_match.group(1)) if race_match else 0
+                        
+                        meeting_key = f"{date}_{venue}"
+                        
+                        # Check for abandoned
+                        try:
+                            card_text = card.inner_text().upper()
+                            if 'ABANDONED' in card_text:
+                                continue
+                        except:
+                            pass
+                        
+                        # Store the race URL
+                        all_race_urls.append({
+                            'url': full_url,
+                            'venue': venue,
+                            'race_number': race_num,
+                            'date': date,
+                            'meeting_key': meeting_key
+                        })
+                        
+                        # Track unique meetings
+                        if meeting_key not in meetings:
+                            meetings[meeting_key] = venue
+            
+            print(f"Found {len(meetings)} meetings with {len(all_race_urls)} races")
+            scrape_status['total_meetings'] = len(meetings)
+            scrape_status['total_races'] = len(all_race_urls)
             scrape_status['meetings_done'] = 0
             
             all_odds = []
             
-            for idx, meeting_url in enumerate(meetings[:10]):  # Limit to first 10 meetings
+            # Process each unique meeting
+            meeting_list = list(meetings.items())
+            for idx, (meeting_key, venue) in enumerate(meeting_list):
                 try:
                     scrape_status['meetings_done'] = idx + 1
-                    scrape_status['progress'] = 10 + int(((idx + 1) / scrape_status['total_meetings']) * 70)
+                    scrape_status['progress'] = 10 + int(((idx + 1) / len(meeting_list)) * 70)
                     
-                    # Estimate time remaining (assume ~30 sec per meeting)
-                    remaining_meetings = scrape_status['total_meetings'] - idx
-                    scrape_status['estimated_time_remaining'] = f"~{remaining_meetings * 30} seconds"
+                    # Estimate time remaining
+                    remaining = len(meeting_list) - idx
+                    scrape_status['estimated_time_remaining'] = f"~{remaining * 20} seconds"
+                    scrape_status['current_step'] = f'Scraping {venue} ({idx + 1}/{len(meeting_list)})...'
                     
-                    if not meeting_url.startswith('http'):
-                        meeting_url = f"https://www.punters.com.au{meeting_url}"
-                    
-                    # Extract venue name from URL
-                    venue = 'Unknown'
-                    print(f"DEBUG: Parsing URL: {meeting_url}")
-                    
-                    # Try multiple patterns
-                    # Pattern 1: /form-guide/venue-name/
-                    if '/form-guide/' in meeting_url:
-                        parts = meeting_url.split('/form-guide/')
-                        if len(parts) > 1 and parts[1]:
-                            venue_part = parts[1].strip('/').split('/')[0]
-                            if venue_part:
-                                venue = venue_part.replace('-', ' ').title()
-                    
-                    # Pattern 2: /racing/venue-name/ 
-                    if venue == 'Unknown' and '/racing/' in meeting_url:
-                        parts = meeting_url.split('/racing/')
-                        if len(parts) > 1 and parts[1]:
-                            venue_part = parts[1].strip('/').split('/')[0]
-                            if venue_part and venue_part != 'form-guide':
-                                venue = venue_part.replace('-', ' ').title()
-                    
-                    print(f"DEBUG: Extracted venue: {venue}")
-                    
-                    scrape_status['current_step'] = f'Scraping {venue} ({idx + 1}/{scrape_status["total_meetings"]})...'
-                    
-                    # Emit update to connected clients
+                    # Emit update
                     socketio.emit('scrape_progress', scrape_status)
+                    print(f"[{idx + 1}/{len(meeting_list)}] Scraping {venue}...")
                     
-                    print(f"[{idx + 1}/{scrape_status['total_meetings']}] Scraping {venue}...")
+                    # Get races for this meeting
+                    meeting_races = [r for r in all_race_urls if r['meeting_key'] == meeting_key]
                     
-                    page.goto(meeting_url, timeout=30000)
-                    time.sleep(2)
-                    
-                    # Try to get venue from page if still unknown
-                    if venue == 'Unknown':
+                    for race_info in meeting_races:
                         try:
-                            # Try h1 or title element
-                            h1 = page.query_selector('h1')
-                            if h1:
-                                venue = h1.inner_text().split(' - ')[0].split(' Race')[0].strip()
-                                print(f"DEBUG: Got venue from page: {venue}")
-                        except:
-                            pass
-                    
-                    # Find race links - collect URLs first
-                    race_urls = []
-                    race_links = page.query_selector_all('a[href*="/race-"]')
-                    
-                    for race_link in race_links:
-                        try:
-                            race_href = race_link.get_attribute('href')
-                            if race_href and race_href not in race_urls:
-                                race_urls.append(race_href)
-                        except:
-                            continue
-                    
-                    # Now navigate to each race URL
-                    for race_href in race_urls:
-                        try:
-                            race_match = re.search(r'/race-(\d+)', race_href)
-                            if race_match:
-                                race_num = int(race_match.group(1))
-                                
-                                # Scrape odds for this race
-                                horses = scrape_race_odds_page(page, race_href)
-                                
-                                if horses:
-                                    all_odds.append({
-                                        'venue': venue,
-                                        'race_number': race_num,
-                                        'horses': horses,
-                                        'url': race_href
-                                    })
+                            odds = scrape_race_odds_page(page, race_info['url'])
+                            if odds:
+                                all_odds.append({
+                                    'venue': race_info['venue'],
+                                    'race_number': race_info['race_number'],
+                                    'url': race_info['url'],
+                                    'horses': odds
+                                })
                         except Exception as e:
-                            print(f"Error scraping race {race_href}: {e}")
-                            continue
-                                
+                            print(f"  Error scraping race {race_info['race_number']}: {e}")
+                    
                 except Exception as e:
-                    print(f"Error scraping meeting {meeting_url}: {e}")
+                    print(f"Error scraping {venue}: {e}")
                     continue
             
             browser.close()
