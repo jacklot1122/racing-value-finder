@@ -153,6 +153,60 @@ def daily_refresh():
         scrape_status['is_scraping'] = False
 
 
+def is_australian_track(venue):
+    """Check if the venue is an Australian track"""
+    venue_lower = venue.lower().replace(' ', '_').replace('-', '_')
+    
+    # Reject any venue with international country suffixes
+    international_suffixes = [
+        '_nz', '_us', '_uk', '_za', '_fr', '_jp', '_tr', '_hk', '_sg',
+        '_ie', '_ae', '_kr', '_in', '_my', '_ph', '_cl', '_ar', '_br'
+    ]
+    
+    for suffix in international_suffixes:
+        if venue_lower.endswith(suffix):
+            return False
+    
+    # Known international venues to exclude
+    international = [
+        # New Zealand
+        'te_rapa', 'trentham', 'ellerslie', 'riccarton', 'otaki', 'awapuni',
+        'hastings', 'matamata', 'pukekohe', 'ruakaka', 'wanganui', 'woodville',
+        'ashburton', 'wingatui', 'riverton', 'oamaru', 'timaru', 'waimate',
+        'cromwell', 'kurow', 'omakau', 'roxburgh', 'tapanui', 'waikouaiti',
+        'avondale', 'rotorua', 'new_plymouth', 'waikato', 'taranaki',
+        # USA
+        'aqueduct', 'belmont_park', 'santa_anita', 'gulfstream', 'del_mar',
+        'churchill', 'keeneland', 'saratoga', 'pimlico', 'laurel', 'parx',
+        'oaklawn', 'tampa_bay', 'fair_grounds', 'turfway', 'golden_gate',
+        'los_alamitos', 'penn_national', 'charles_town', 'mountaineer',
+        'presque_isle', 'finger_lakes', 'monmouth', 'woodbine',
+        # Hong Kong
+        'hong_kong', 'sha_tin', 'happy_valley',
+        # Singapore
+        'kranji',
+        # Japan
+        'tokyo', 'nakayama', 'kyoto', 'hanshin', 'chukyo',
+        # UK
+        'newmarket', 'epsom', 'cheltenham', 'goodwood', 'kempton', 'lingfield', 
+        'wolverhampton', 'doncaster', 'haydock', 'aintree',
+        # Ireland
+        'curragh', 'leopardstown', 'fairyhouse', 'punchestown', 'galway',
+        # France
+        'longchamp', 'chantilly', 'deauville', 'saint_cloud',
+        # Dubai/UAE
+        'meydan', 'abu_dhabi',
+        # South Africa
+        'turffontein', 'kenilworth', 'greyville', 'scottsville', 'fairview', 'vaal',
+    ]
+    
+    for intl in international:
+        if intl in venue_lower:
+            return False
+    
+    return True
+
+
 def scrape_todays_races():
     """Scrape today's race meetings and odds"""
     global scrape_status
@@ -220,6 +274,10 @@ def scrape_todays_races():
                         # Extract race number
                         race_match = re.search(r'race-(\d+)', race_part)
                         race_num = int(race_match.group(1)) if race_match else 0
+                        
+                        # Only include Australian tracks
+                        if not is_australian_track(venue):
+                            continue
                         
                         meeting_key = f"{date}_{venue}"
                         
