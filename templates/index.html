@@ -608,13 +608,16 @@
                     </div>
                 </div>
 
-                <!-- Dud Favourites -->
+                <!-- Dud Favourites / Dutch The Field -->
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-exclamation-triangle me-2" style="color: var(--accent-red);"></i>Dud Favourite Alerts</span>
+                        <span><i class="bi bi-exclamation-triangle me-2" style="color: var(--accent-red);"></i>Dud Favourites - Dutch The Field</span>
                         <span class="badge bg-danger" id="dudBadge">0</span>
                     </div>
-                    <div class="card-body" id="dudContainer" style="max-height: 350px; overflow-y: auto;">
+                    <div class="card-body p-2" style="font-size: 0.75rem; color: var(--text-muted); border-bottom: 1px solid var(--border-color);">
+                        <i class="bi bi-info-circle me-1"></i>When a favourite is overrated, dutch bet the rest of the field for value
+                    </div>
+                    <div class="card-body" id="dudContainer" style="max-height: 500px; overflow-y: auto;">
                         <div class="empty-state">
                             <i class="bi bi-hourglass-split"></i>
                             <p>Loading alerts...</p>
@@ -871,13 +874,76 @@
             let html = '';
             appData.dud_favourites.forEach((dud, index) => {
                 const delay = index * 50;
+                const isDutchArb = dud.is_dutch_arb;
+                const fieldEdgeClass = dud.field_edge > 0 ? 'edge-positive' : 'edge-negative';
+                
+                // Build dutch stakes table
+                let dutchStakesHtml = '';
+                if (dud.dutch_stakes && dud.dutch_stakes.length > 0) {
+                    dutchStakesHtml = `
+                        <div class="mt-3 pt-3" style="border-top: 1px solid var(--border-color);">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <strong style="color: var(--accent-purple); font-size: 0.85rem;">
+                                    <i class="bi bi-calculator me-1"></i>Dutch The Field Strategy
+                                </strong>
+                                ${isDutchArb ? '<span class="badge" style="background: linear-gradient(135deg, var(--accent-green), #2ea043); font-size: 0.65rem;">GUARANTEED PROFIT</span>' : ''}
+                            </div>
+                            <div class="row g-2 mb-2">
+                                <div class="col-4">
+                                    <div class="text-center p-2" style="background: var(--bg-surface); border-radius: 8px;">
+                                        <div style="font-size: 0.65rem; color: var(--text-muted);">Field Win %</div>
+                                        <div style="font-size: 1rem; font-weight: 700; color: var(--accent-green);">${dud.field_model_prob}%</div>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="text-center p-2" style="background: var(--bg-surface); border-radius: 8px;">
+                                        <div style="font-size: 0.65rem; color: var(--text-muted);">Dutch Book</div>
+                                        <div style="font-size: 1rem; font-weight: 700; ${dud.field_dutch_book < 1 ? 'color: var(--accent-green);' : ''}">${dud.field_dutch_book.toFixed(3)}</div>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="text-center p-2" style="background: var(--bg-surface); border-radius: 8px;">
+                                        <div style="font-size: 0.65rem; color: var(--text-muted);">Edge</div>
+                                        <div style="font-size: 1rem; font-weight: 700; ${dud.field_edge > 0 ? 'color: var(--accent-green);' : 'color: var(--text-muted);'}">+${dud.field_edge}%</div>
+                                    </div>
+                                </div>
+                            </div>
+                            ${isDutchArb ? `<div class="alert mb-2" style="background: rgba(46, 160, 67, 0.15); border: 1px solid var(--accent-green); border-radius: 8px; padding: 0.5rem; font-size: 0.75rem; color: var(--accent-green);">
+                                <i class="bi bi-check-circle-fill me-1"></i>Dutch profit: <strong>${dud.dutch_profit_pct.toFixed(2)}%</strong> guaranteed if any non-favourite wins
+                            </div>` : ''}
+                            <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;">Stakes to return $100:</div>
+                            <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                                <table class="table table-sm mb-0" style="font-size: 0.75rem;">
+                                    <thead style="position: sticky; top: 0; background: var(--bg-card);">
+                                        <tr>
+                                            <th style="padding: 0.3rem;">Horse</th>
+                                            <th style="padding: 0.3rem;">Odds</th>
+                                            <th style="padding: 0.3rem;">Stake %</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${dud.dutch_stakes.slice(0, 8).map(h => `
+                                            <tr>
+                                                <td style="padding: 0.3rem;"><span class="text-muted">${h.number}.</span> ${h.name}</td>
+                                                <td style="padding: 0.3rem;">$${h.odds.toFixed(2)}</td>
+                                                <td style="padding: 0.3rem; color: var(--accent-blue); font-weight: 600;">${h.stake_pct}%</td>
+                                            </tr>
+                                        `).join('')}
+                                        ${dud.dutch_stakes.length > 8 ? `<tr><td colspan="3" class="text-muted text-center">+${dud.dutch_stakes.length - 8} more...</td></tr>` : ''}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>`;
+                }
+                
                 html += `
-                    <div class="value-pick dud-alert" onclick="viewRace('${dud.venue}', ${dud.race_number})" style="animation-delay: ${delay}ms;">
+                    <div class="value-pick dud-alert" onclick="viewRace('${dud.venue}', ${dud.race_number})" style="animation-delay: ${delay}ms; cursor: pointer;">
                         <div class="d-flex justify-content-between align-items-start">
                             <div>
                                 <div class="d-flex align-items-center gap-2 mb-1">
                                     <span class="badge bg-secondary" style="font-size: 0.7rem;">${dud.venue}</span>
                                     <span class="text-muted" style="font-size: 0.8rem;">Race ${dud.race_number}</span>
+                                    ${dud.field_size ? `<span class="text-muted" style="font-size: 0.7rem;">(${dud.field_size + 1} runners)</span>` : ''}
                                 </div>
                                 <h6 class="horse-name mb-1" style="color: var(--accent-red);">
                                     <i class="bi bi-exclamation-triangle-fill me-1"></i>${dud.favourite}
@@ -886,17 +952,18 @@
                             </div>
                             <div class="text-end">
                                 <span class="edge-badge edge-negative">
-                                    <i class="bi bi-arrow-down-short"></i>${(dud.edge * 100).toFixed(1)}%
+                                    ${dud.overrated_by || Math.abs(dud.edge * 100).toFixed(1)}% overrated
                                 </span>
                             </div>
                         </div>
                         <div class="mt-3 pt-2" style="border-top: 1px solid var(--border-color);">
                             <div class="d-flex gap-3 mb-2">
-                                <small class="text-muted">Model: ${(dud.model_prob * 100).toFixed(0)}%</small>
-                                <small class="text-muted">Market: ${(dud.implied_prob * 100).toFixed(0)}%</small>
+                                <small class="text-muted"><i class="bi bi-cpu me-1"></i>Model: ${(dud.model_prob * 100).toFixed(0)}%</small>
+                                <small class="text-muted"><i class="bi bi-graph-up me-1"></i>Market: ${(dud.implied_prob * 100).toFixed(0)}%</small>
                             </div>
-                            <small style="color: var(--accent-green);"><i class="bi bi-lightbulb me-1"></i>Consider: ${dud.better_picks.join(', ')}</small>
+                            <small style="color: var(--accent-green);"><i class="bi bi-lightbulb me-1"></i>Better picks: ${dud.better_picks.join(', ')}</small>
                         </div>
+                        ${dutchStakesHtml}
                     </div>`;
             });
             

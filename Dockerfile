@@ -44,6 +44,9 @@ RUN playwright install-deps firefox
 # Copy application code
 COPY . .
 
+# Make entrypoint executable
+RUN chmod +x entrypoint.sh
+
 # Expose port
 EXPOSE 8080
 
@@ -51,5 +54,5 @@ EXPOSE 8080
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8080
 
-# Run the application - Railway provides PORT env variable
-CMD ["/bin/sh", "-c", "gunicorn --worker-class eventlet -w 1 app:app --bind 0.0.0.0:$PORT"]
+# Run the application using entrypoint script
+ENTRYPOINT ["./entrypoint.sh"]

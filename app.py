@@ -401,17 +401,67 @@ def analyze_all_data():
         favourite = min(horse_odds, key=lambda x: x['best_odds'])
         
         # Check for dud favourite (model thinks it's overrated)
-        if favourite['edge'] < -0.05:  # 5% negative edge
-            race_data['dud_favourites'].append({
-                'venue': venue,
-                'race_number': race_num,
-                'favourite': favourite['name'],
-                'odds': favourite['best_odds'],
-                'model_prob': favourite['model_prob'],
-                'implied_prob': favourite['implied_prob'],
-                'edge': favourite['edge'],
-                'better_picks': [h['name'] for h in horse_odds[:3] if h['name'] != favourite['name']][:2]
-            })
+        # This is a "lay the favourite" or "dutch the field" opportunity
+        if favourite['edge'] < -0.05:  # 5% negative edge (favourite is overrated)
+            # Calculate the dutch book for the rest of the field (excluding favourite)
+            other_horses = [h for h in horse_odds if h['name'] != favourite['name']]
+            
+            if len(other_horses) >= 2:
+                # Dutch book for non-favourites
+                field_dutch_book = sum(1.0 / h['best_odds'] for h in other_horses)
+                
+                # Model's probability that NON-favourite wins
+                field_model_prob = sum(h['model_prob'] for h in other_horses)
+                
+                # Market's implied probability that NON-favourite wins
+                field_implied_prob = 1.0 - favourite['implied_prob']
+                
+                # If field dutch book < 1, dutching the field is profitable
+                # Even if > 1, if model says field is more likely, it's still value
+                field_edge = field_model_prob - field_implied_prob
+                
+                # Calculate potential profit from dutching the field
+                # If you bet to win $100 on any non-favourite winning:
+                # Total stake = 100 * field_dutch_book
+                # Profit if any non-fav wins = 100 - stake = 100 * (1 - field_dutch_book)
+                dutch_profit_pct = (1.0 - field_dutch_book) * 100 if field_dutch_book < 1 else 0
+                
+                # Calculate stakes for each horse to dutch (equal return of $100)
+                dutch_stakes = []
+                for h in other_horses:
+                    stake_pct = (1.0 / h['best_odds']) / field_dutch_book * 100
+                    dutch_stakes.append({
+                        'name': h['name'],
+                        'number': h.get('number', 0),
+                        'odds': h['best_odds'],
+                        'bookmaker': h.get('best_bookmaker', ''),
+                        'stake_pct': round(stake_pct, 1),
+                        'model_prob': h['model_prob'],
+                        'form_score': h.get('form_score', 0)
+                    })
+                
+                race_data['dud_favourites'].append({
+                    'venue': venue,
+                    'race_number': race_num,
+                    'favourite': favourite['name'],
+                    'favourite_number': favourite.get('number', 0),
+                    'odds': favourite['best_odds'],
+                    'model_prob': favourite['model_prob'],
+                    'implied_prob': favourite['implied_prob'],
+                    'edge': favourite['edge'],
+                    'overrated_by': round(abs(favourite['edge']) * 100, 1),  # % overrated
+                    'better_picks': [h['name'] for h in horse_odds[:3] if h['name'] != favourite['name']][:2],
+                    # Dutch the field data
+                    'field_dutch_book': round(field_dutch_book, 4),
+                    'field_model_prob': round(field_model_prob * 100, 1),
+                    'field_implied_prob': round(field_implied_prob * 100, 1),
+                    'field_edge': round(field_edge * 100, 1),
+                    'dutch_profit_pct': round(dutch_profit_pct, 2),
+                    'is_dutch_arb': field_dutch_book < 1.0,
+                    'dutch_stakes': dutch_stakes,
+                    'field_size': len(other_horses),
+                    'url': odds_race.get('url', '')
+                })
         
         # Find value picks (model prob > implied prob by threshold)
         for h in horse_odds:
