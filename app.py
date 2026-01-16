@@ -10,17 +10,28 @@ import time
 import re
 import shutil
 import threading
+import glob
 from datetime import datetime
 import pytz
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO, emit
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
+import requests
 
 # Add parent directory for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from playwright.sync_api import sync_playwright
+
+# Try to import PDF analysis
+try:
+    import pdfplumber
+    PDF_ANALYSIS_AVAILABLE = True
+except ImportError:
+    PDF_ANALYSIS_AVAILABLE = False
+    print("Note: pdfplumber not installed. Form analysis disabled.")
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'racing-value-finder-2026')
@@ -119,16 +130,32 @@ def daily_refresh():
         # Clean up old data folders
         cleanup_old_data()
         
-        scrape_status['current_step'] = 'Scraping race meetings...'
+        scrape_status['current_step'] = 'Downloading form guides...'
         scrape_status['progress'] = 10
-        socketio.emit('scrape_progress', scrape_status)
+        try:
+            socketio.emit('scrape_progress', scrape_status)
+        except:
+            pass
         
-        # Scrape new data for today
-        scrape_todays_races()
+        # Download form PDFs (only if not already downloaded)
+        download_form_guides()
+        
+        scrape_status['current_step'] = 'Scraping live odds...'
+        scrape_status['progress'] = 50
+        try:
+            socketio.emit('scrape_progress', scrape_status)
+        except:
+            pass
+        
+        # Scrape odds data
+        scrape_live_odds()
         
         scrape_status['current_step'] = 'Analyzing data...'
         scrape_status['progress'] = 90
-        socketio.emit('scrape_progress', scrape_status)
+        try:
+            socketio.emit('scrape_progress', scrape_status)
+        except:
+            pass
         
         # Reload data into memory
         load_existing_data()
@@ -136,21 +163,432 @@ def daily_refresh():
         scrape_status['current_step'] = 'Complete!'
         scrape_status['progress'] = 100
         scrape_status['is_scraping'] = False
-        socketio.emit('scrape_progress', scrape_status)
-        
-        # Notify connected clients
-        socketio.emit('data_refreshed', {'time': get_sydney_time().strftime("%H:%M:%S")})
+        try:
+            socketio.emit('scrape_progress', scrape_status)
+            socketio.emit('data_refreshed', {'time': get_sydney_time().strftime("%H:%M:%S")})
+        except:
+            pass
         
         print(f"[{get_sydney_time()}] Daily refresh complete!")
         
     except Exception as e:
         scrape_status['error'] = str(e)
         scrape_status['is_scraping'] = False
-        socketio.emit('scrape_progress', scrape_status)
+        try:
+            socketio.emit('scrape_progress', scrape_status)
+        except:
+            pass
         print(f"[{get_sydney_time()}] Error during refresh: {e}")
     
     finally:
         scrape_status['is_scraping'] = False
+
+
+def check_form_exists():
+    """Check if form guides already exist for today"""
+    folder = get_data_folder()
+    form_file = os.path.join(folder, "form_analysis.csv")
+    
+    if os.path.exists(form_file):
+        file_size = os.path.getsize(form_file)
+        if file_size > 100:
+            print(f"✓ Form analysis already exists ({file_size} bytes)")
+            return True
+    
+    # Also check for PDF files
+    pdf_folder = os.path.join(folder, "pdfs")
+    if os.path.exists(pdf_folder):
+        pdfs = glob.glob(os.path.join(pdf_folder, "**", "*.pdf"), recursive=True)
+        if len(pdfs) > 0:
+            print(f"✓ Found {len(pdfs)} PDF files")
+            return True
+    
+    return False
+
+
+def download_form_guides():
+    """Download form guide PDFs for today's meetings (only if not already downloaded)"""
+    global scrape_status
+    
+    folder = get_data_folder()
+    pdf_folder = os.path.join(folder, "pdfs")
+    os.makedirs(pdf_folder, exist_ok=True)
+    
+    # Check if we already have form data
+    if check_form_exists():
+        print("Form guides already downloaded - skipping")
+        return
+    
+    print(f"Downloading form guides to {pdf_folder}...")
+    
+    try:
+        with sync_playwright() as p:
+            browser = p.firefox.launch(headless=True)
+            context = browser.new_context(
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0'
+            )
+            page = context.new_page()
+            
+            # Go to punters.com.au form guide
+            page.goto("https://www.punters.com.au/form-guide/", timeout=30000)
+            time.sleep(3)
+            
+            # Wait for content
+            try:
+                page.wait_for_selector('a[href*="/form-guide/horses/"]', timeout=15000)
+            except:
+                time.sleep(5)
+            
+            # Get all race links
+            race_cards = page.query_selector_all('a[href*="/form-guide/horses/"]')
+            
+            # Extract unique meetings
+            meetings = {}
+            for card in race_cards:
+                href = card.get_attribute('href')
+                if href and '/form-guide/horses/' in href:
+                    pattern = r'/form-guide/horses/([^/]+)/([^/]+)/'
+                    match = re.search(pattern, href)
+                    
+                    if match:
+                        venue_date = match.group(1)
+                        date_match = re.search(r'(\d{8})$', venue_date)
+                        
+                        if date_match:
+                            date = date_match.group(1)
+                            venue = venue_date.replace(f'-{date}', '').replace('-', ' ').title()
+                            
+                            if is_australian_track(venue):
+                                meeting_key = f"{date}_{venue.replace(' ', '_')}"
+                                if meeting_key not in meetings:
+                                    base_url = f"https://www.punters.com.au/form-guide/horses/{venue_date}/"
+                                    meetings[meeting_key] = {
+                                        'venue': venue,
+                                        'date': date,
+                                        'url': base_url
+                                    }
+            
+            print(f"Found {len(meetings)} Australian meetings")
+            
+            downloaded = 0
+            for meeting_key, info in meetings.items():
+                try:
+                    venue = info['venue']
+                    print(f"  Downloading form for {venue}...")
+                    
+                    # Go to meeting page and find PDF link
+                    page.goto(info['url'], timeout=30000)
+                    time.sleep(2)
+                    
+                    # Look for PDF download link
+                    pdf_link = page.query_selector('a[href*=".pdf"]')
+                    if not pdf_link:
+                        pdf_link = page.query_selector('a:has-text("Full Form")')
+                    if not pdf_link:
+                        pdf_link = page.query_selector('a:has-text("Download")')
+                    
+                    if pdf_link:
+                        pdf_url = pdf_link.get_attribute('href')
+                        if pdf_url and not pdf_url.startswith('http'):
+                            pdf_url = f"https://www.punters.com.au{pdf_url}"
+                        
+                        # Download PDF
+                        venue_folder = os.path.join(pdf_folder, meeting_key)
+                        os.makedirs(venue_folder, exist_ok=True)
+                        pdf_path = os.path.join(venue_folder, f"{venue}_full_form.pdf")
+                        
+                        response = requests.get(pdf_url, timeout=30)
+                        if response.status_code == 200:
+                            with open(pdf_path, 'wb') as f:
+                                f.write(response.content)
+                            print(f"    ✓ Downloaded {venue} form guide")
+                            downloaded += 1
+                    else:
+                        print(f"    → No PDF link found for {venue}")
+                        
+                except Exception as e:
+                    print(f"    ✗ Error downloading {info['venue']}: {e}")
+            
+            browser.close()
+            print(f"Downloaded {downloaded} form guides")
+            
+            # Analyze PDFs if pdfplumber is available
+            if PDF_ANALYSIS_AVAILABLE and downloaded > 0:
+                analyze_form_pdfs(pdf_folder, folder)
+                
+    except Exception as e:
+        print(f"Error downloading form guides: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def analyze_form_pdfs(pdf_folder, output_folder):
+    """Analyze downloaded PDF form guides"""
+    print("\nAnalyzing form guides...")
+    
+    pdf_files = glob.glob(os.path.join(pdf_folder, "**", "*.pdf"), recursive=True)
+    
+    if not pdf_files:
+        print("No PDFs found to analyze")
+        return
+    
+    form_data = []
+    
+    for pdf_path in pdf_files:
+        try:
+            venue_folder = os.path.basename(os.path.dirname(pdf_path))
+            venue = venue_folder.split('_', 1)[1] if '_' in venue_folder else venue_folder
+            venue = venue.replace('_', ' ').title()
+            
+            with pdfplumber.open(pdf_path) as pdf:
+                for page_num, page in enumerate(pdf.pages[:10], 1):
+                    text = page.extract_text() or ""
+                    
+                    # Simple form parsing - extract horse names and form
+                    lines = text.split('\n')
+                    for line in lines:
+                        # Look for form pattern like "12. Horse Name (5) x2341"
+                        match = re.search(r'(\d+)\.\s+([A-Za-z\s]+)\s*\((\d+)\)\s*([x\d]+)?', line)
+                        if match:
+                            horse_num = match.group(1)
+                            horse_name = match.group(2).strip()
+                            barrier = match.group(3)
+                            form = match.group(4) or ""
+                            
+                            form_data.append({
+                                'Venue': venue,
+                                'Race': page_num,
+                                'Horse': horse_name,
+                                'Number': horse_num,
+                                'Barrier': barrier,
+                                'Form': form,
+                                'Form Score': calculate_form_score(form)
+                            })
+                            
+        except Exception as e:
+            print(f"  Error analyzing {pdf_path}: {e}")
+    
+    # Save form analysis
+    if form_data:
+        import csv
+        form_file = os.path.join(output_folder, "form_analysis.csv")
+        with open(form_file, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=['Venue', 'Race', 'Horse', 'Number', 'Barrier', 'Form', 'Form Score'])
+            writer.writeheader()
+            writer.writerows(form_data)
+        print(f"✓ Saved form analysis for {len(form_data)} horses")
+
+
+def calculate_form_score(form_string):
+    """Calculate a form score from recent results"""
+    if not form_string:
+        return 0
+    
+    score = 0
+    weights = [5, 4, 3, 2, 1]  # Most recent has highest weight
+    
+    for i, char in enumerate(form_string[:5]):
+        weight = weights[i] if i < len(weights) else 1
+        if char == '1':
+            score += 10 * weight
+        elif char == '2':
+            score += 7 * weight
+        elif char == '3':
+            score += 5 * weight
+        elif char == '4':
+            score += 3 * weight
+        elif char in '56789':
+            score += 1 * weight
+        elif char.lower() == 'x':
+            score -= 2 * weight
+    
+    return score
+
+
+def scrape_live_odds():
+    """Scrape current odds from all bookmakers"""
+    global scrape_status
+    
+    folder = get_data_folder()
+    os.makedirs(folder, exist_ok=True)
+    
+    print(f"[{get_sydney_time()}] Scraping live odds...")
+    
+    try:
+        with sync_playwright() as p:
+            browser = p.firefox.launch(headless=True)
+            context = browser.new_context(
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0'
+            )
+            page = context.new_page()
+            
+            page.goto("https://www.punters.com.au/form-guide/", timeout=30000)
+            time.sleep(3)
+            
+            try:
+                page.wait_for_selector('a[href*="/form-guide/horses/"]', timeout=15000)
+            except:
+                time.sleep(5)
+            
+            race_cards = page.query_selector_all('a[href*="/form-guide/horses/"]')
+            
+            meetings = {}
+            abandoned_meetings = set()
+            all_race_urls = []
+            
+            for card in race_cards:
+                href = card.get_attribute('href')
+                if href and '/form-guide/horses/' in href:
+                    full_url = f"https://www.punters.com.au{href}" if not href.startswith('http') else href
+                    full_url = full_url.split('#')[0]
+                    
+                    pattern = r'/form-guide/horses/([^/]+)/([^/]+)/'
+                    match = re.search(pattern, href)
+                    
+                    if match:
+                        venue_date = match.group(1)
+                        race_part = match.group(2)
+                        
+                        date_match = re.search(r'(\d{8})$', venue_date)
+                        if date_match:
+                            date = date_match.group(1)
+                            venue = venue_date.replace(f'-{date}', '').replace('-', ' ').title()
+                        else:
+                            date = get_sydney_time().strftime("%Y%m%d")
+                            venue = venue_date.replace('-', ' ').title()
+                        
+                        race_match = re.search(r'race-(\d+)', race_part)
+                        race_num = int(race_match.group(1)) if race_match else 0
+                        
+                        if not is_australian_track(venue):
+                            continue
+                        
+                        meeting_key = f"{date}_{venue}"
+                        
+                        # Check for abandoned
+                        try:
+                            card_text = card.inner_text().upper()
+                            parent = card.evaluate('el => el.closest(".event-card-container, .meeting-card, [class*=meeting]")?.innerText?.toUpperCase() || ""')
+                            
+                            if 'ABANDONED' in card_text or 'ABANDONED' in parent:
+                                abandoned_meetings.add(meeting_key)
+                                continue
+                        except:
+                            pass
+                        
+                        if meeting_key in abandoned_meetings:
+                            continue
+                        
+                        all_race_urls.append({
+                            'url': full_url,
+                            'venue': venue,
+                            'race_number': race_num,
+                            'date': date,
+                            'meeting_key': meeting_key
+                        })
+                        
+                        if meeting_key not in meetings:
+                            meetings[meeting_key] = venue
+            
+            print(f"Found {len(meetings)} meetings with {len(all_race_urls)} races")
+            scrape_status['total_meetings'] = len(meetings)
+            scrape_status['total_races'] = len(all_race_urls)
+            
+            all_odds = []
+            
+            meeting_list = list(meetings.items())
+            for idx, (meeting_key, venue) in enumerate(meeting_list):
+                try:
+                    scrape_status['meetings_done'] = idx + 1
+                    scrape_status['progress'] = 50 + int(((idx + 1) / len(meeting_list)) * 40)
+                    scrape_status['current_step'] = f'Scraping {venue} ({idx + 1}/{len(meeting_list)})...'
+                    
+                    try:
+                        socketio.emit('scrape_progress', scrape_status)
+                    except:
+                        pass
+                    print(f"[{idx + 1}/{len(meeting_list)}] Scraping {venue}...")
+                    
+                    meeting_races = [r for r in all_race_urls if r['meeting_key'] == meeting_key]
+                    
+                    # Check first race for abandoned
+                    if meeting_races:
+                        first_race = meeting_races[0]
+                        try:
+                            page.goto(first_race['url'], timeout=30000)
+                            time.sleep(1)
+                            page_text = page.inner_text('body').upper()
+                            
+                            if 'ABANDONED' in page_text or 'MEETING ABANDONED' in page_text:
+                                abandoned_meetings.add(meeting_key)
+                                print(f"  → Meeting ABANDONED - skipping")
+                                continue
+                        except:
+                            pass
+                    
+                    for race_info in meeting_races:
+                        try:
+                            odds = scrape_race_odds_page(page, race_info['url'])
+                            if odds:
+                                all_odds.append({
+                                    'venue': race_info['venue'],
+                                    'race_number': race_info['race_number'],
+                                    'url': race_info['url'],
+                                    'horses': odds
+                                })
+                                print(f"    → Race {race_info['race_number']}: {len(odds)} horses")
+                            else:
+                                print(f"    → Race {race_info['race_number']}: No odds found")
+                        except Exception as e:
+                            print(f"  Error scraping race {race_info['race_number']}: {e}")
+                            
+                except Exception as e:
+                    print(f"Error scraping {venue}: {e}")
+            
+            browser.close()
+            
+            # Save odds data
+            if all_odds:
+                odds_file = os.path.join(folder, "odds_data.json")
+                with open(odds_file, 'w', encoding='utf-8') as f:
+                    json.dump(all_odds, f, indent=2)
+                print(f"✓ Saved {len(all_odds)} races to {odds_file}")
+            else:
+                print("✗ No odds data collected")
+                
+            if abandoned_meetings:
+                print(f"Skipped {len(abandoned_meetings)} abandoned meetings")
+                
+    except Exception as e:
+        print(f"Error scraping odds: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def quick_odds_refresh():
+    """Quick odds refresh for monitoring opportunities - runs every 2 minutes when active"""
+    # Only run if there are active opportunities
+    if not race_data['arb_opportunities'] and not race_data['value_picks']:
+        return
+    
+    print(f"[{get_sydney_time()}] Quick odds refresh (monitoring {len(race_data['arb_opportunities'])} opportunities)...")
+    
+    try:
+        scrape_live_odds()
+        load_existing_data()
+        
+        # Notify clients of updated data
+        try:
+            socketio.emit('data_refreshed', {
+                'time': get_sydney_time().strftime("%H:%M:%S"),
+                'opportunities': len(race_data['arb_opportunities']),
+                'quick_refresh': True
+            })
+        except:
+            pass
+            
+    except Exception as e:
+        print(f"Error in quick refresh: {e}")
 
 
 def is_australian_track(venue):
@@ -205,204 +643,6 @@ def is_australian_track(venue):
             return False
     
     return True
-
-
-def scrape_todays_races():
-    """Scrape today's race meetings and odds"""
-    global scrape_status
-    
-    folder = get_data_folder()
-    os.makedirs(folder, exist_ok=True)
-    
-    print(f"Scraping today's races to {folder}...")
-    
-    try:
-        with sync_playwright() as p:
-            browser = p.firefox.launch(headless=True)
-            context = browser.new_context(
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0'
-            )
-            page = context.new_page()
-            
-            scrape_status['current_step'] = 'Loading racing page...'
-            
-            # Go to punters.com.au thoroughbred racing page
-            page.goto("https://www.punters.com.au/form-guide/", timeout=30000)
-            time.sleep(3)
-            
-            # Wait for race cards to load
-            try:
-                page.wait_for_selector('a[href*="/form-guide/horses/"]', timeout=15000)
-                print("→ Found race links")
-            except:
-                print("→ Waiting for content...")
-                time.sleep(5)
-            
-            # Get all race card links - use the same selector as racingwebsite.py
-            race_cards = page.query_selector_all('a.event-card[href*="/form-guide/"]')
-            if not race_cards:
-                race_cards = page.query_selector_all('a[href*="/form-guide/horses/"]')
-            
-            # Extract unique meetings (group by venue)
-            meetings = {}
-            abandoned_meetings = set()
-            all_race_urls = []
-            
-            for card in race_cards:
-                href = card.get_attribute('href')
-                if href and '/form-guide/horses/' in href:
-                    full_url = f"https://www.punters.com.au{href}" if not href.startswith('http') else href
-                    full_url = full_url.split('#')[0]
-                    
-                    # Extract venue and date using pattern from racingwebsite.py
-                    # Example: /form-guide/horses/canterbury-20260116/race-1/
-                    pattern = r'/form-guide/horses/([^/]+)/([^/]+)/'
-                    match = re.search(pattern, href)
-                    
-                    if match:
-                        venue_date = match.group(1)
-                        race_part = match.group(2)
-                        
-                        # Extract date from venue string (last 8 digits)
-                        date_match = re.search(r'(\d{8})$', venue_date)
-                        if date_match:
-                            date = date_match.group(1)
-                            venue = venue_date.replace(f'-{date}', '').replace('-', ' ').title()
-                        else:
-                            date = get_sydney_time().strftime("%Y%m%d")
-                            venue = venue_date.replace('-', ' ').title()
-                        
-                        # Extract race number
-                        race_match = re.search(r'race-(\d+)', race_part)
-                        race_num = int(race_match.group(1)) if race_match else 0
-                        
-                        # Only include Australian tracks
-                        if not is_australian_track(venue):
-                            continue
-                        
-                        meeting_key = f"{date}_{venue}"
-                        
-                        # Check for abandoned - look at card text and parent elements
-                        try:
-                            card_text = card.inner_text().upper()
-                            # Also check parent container for abandoned status
-                            parent = card.evaluate('el => el.closest(".event-card-container, .meeting-card, [class*=meeting]")?.innerText?.toUpperCase() || ""')
-                            
-                            if 'ABANDONED' in card_text or 'ABANDONED' in parent:
-                                abandoned_meetings.add(meeting_key)
-                                print(f"  → Skipping {venue} (ABANDONED)")
-                                continue
-                        except:
-                            pass
-                        
-                        # Skip if this meeting is already marked abandoned
-                        if meeting_key in abandoned_meetings:
-                            continue
-                        
-                        # Store the race URL
-                        all_race_urls.append({
-                            'url': full_url,
-                            'venue': venue,
-                            'race_number': race_num,
-                            'date': date,
-                            'meeting_key': meeting_key
-                        })
-                        
-                        # Track unique meetings
-                        if meeting_key not in meetings:
-                            meetings[meeting_key] = venue
-            
-            print(f"Found {len(meetings)} meetings with {len(all_race_urls)} races")
-            scrape_status['total_meetings'] = len(meetings)
-            scrape_status['total_races'] = len(all_race_urls)
-            scrape_status['meetings_done'] = 0
-            
-            all_odds = []
-            
-            # Process each unique meeting
-            meeting_list = list(meetings.items())
-            for idx, (meeting_key, venue) in enumerate(meeting_list):
-                try:
-                    scrape_status['meetings_done'] = idx + 1
-                    scrape_status['progress'] = 10 + int(((idx + 1) / len(meeting_list)) * 70)
-                    
-                    # Estimate time remaining
-                    remaining = len(meeting_list) - idx
-                    scrape_status['estimated_time_remaining'] = f"~{remaining * 20} seconds"
-                    scrape_status['current_step'] = f'Scraping {venue} ({idx + 1}/{len(meeting_list)})...'
-                    
-                    # Emit update (with error handling)
-                    try:
-                        socketio.emit('scrape_progress', scrape_status)
-                    except:
-                        pass
-                    print(f"[{idx + 1}/{len(meeting_list)}] Scraping {venue}...")
-                    
-                    # Get races for this meeting
-                    meeting_races = [r for r in all_race_urls if r['meeting_key'] == meeting_key]
-                    
-                    # Check first race page for abandoned status
-                    if meeting_races:
-                        first_race = meeting_races[0]
-                        try:
-                            page.goto(first_race['url'], timeout=30000)
-                            time.sleep(1)
-                            page_text = page.inner_text('body').upper()
-                            
-                            # Check for abandoned indicators
-                            if 'ABANDONED' in page_text or 'MEETING ABANDONED' in page_text:
-                                abandoned_meetings.add(meeting_key)
-                                print(f"  → Meeting ABANDONED - skipping all races")
-                                continue
-                        except Exception as e:
-                            print(f"  → Error checking meeting status: {e}")
-                    
-                    for race_info in meeting_races:
-                        try:
-                            odds = scrape_race_odds_page(page, race_info['url'])
-                            if odds:
-                                all_odds.append({
-                                    'venue': race_info['venue'],
-                                    'race_number': race_info['race_number'],
-                                    'url': race_info['url'],
-                                    'horses': odds
-                                })
-                                print(f"    → Race {race_info['race_number']}: {len(odds)} horses")
-                            else:
-                                print(f"    → Race {race_info['race_number']}: No odds found")
-                        except Exception as e:
-                            print(f"  Error scraping race {race_info['race_number']}: {e}")
-                    
-                except Exception as e:
-                    print(f"Error scraping {venue}: {e}")
-                    continue
-            
-            browser.close()
-            
-            # Save odds data
-            if all_odds:
-                odds_file = os.path.join(folder, "odds_data.json")
-                with open(odds_file, 'w', encoding='utf-8') as f:
-                    json.dump(all_odds, f, indent=2)
-                print(f"✓ Saved {len(all_odds)} races to {odds_file}")
-                
-                # Verify file was saved
-                if os.path.exists(odds_file):
-                    file_size = os.path.getsize(odds_file)
-                    print(f"✓ File verified: {file_size} bytes")
-                else:
-                    print("✗ File not found after save!")
-            else:
-                print("✗ No odds data collected to save")
-            
-            # Log abandoned meetings
-            if abandoned_meetings:
-                print(f"Skipped {len(abandoned_meetings)} abandoned meetings: {list(abandoned_meetings)}")
-            
-    except Exception as e:
-        print(f"Error in scrape_todays_races: {e}")
-        import traceback
-        traceback.print_exc()
 
 
 def scrape_race_odds_page(page, race_url):
@@ -491,6 +731,14 @@ scheduler.add_job(
     daily_refresh,
     CronTrigger(hour=5, minute=0, timezone=SYDNEY_TZ),
     id='daily_refresh',
+    replace_existing=True
+)
+
+# Schedule quick odds refresh every 2 minutes (when opportunities exist)
+scheduler.add_job(
+    quick_odds_refresh,
+    IntervalTrigger(minutes=2),
+    id='quick_odds_refresh',
     replace_existing=True
 )
 
@@ -1154,21 +1402,38 @@ scheduler.start()
 # Load data on module import for production
 folder = get_data_folder()
 odds_file = os.path.join(folder, "odds_data.json")
+form_file = os.path.join(folder, "form_analysis.csv")
+pdf_folder = os.path.join(folder, "pdfs")
 
 print(f"Checking for existing data in: {folder}")
 print(f"  /data exists: {os.path.exists('/data')}")
 print(f"  Folder exists: {os.path.exists(folder)}")
+print(f"  Form file exists: {os.path.exists(form_file)}")
+print(f"  PDF folder exists: {os.path.exists(pdf_folder)}")
 print(f"  Odds file exists: {os.path.exists(odds_file)}")
+
+# Check if we have form data (PDFs are persistent, only download once)
+form_exists = os.path.exists(form_file) or (os.path.exists(pdf_folder) and len(glob.glob(os.path.join(pdf_folder, "**", "*.pdf"), recursive=True)) > 0)
+
+if form_exists:
+    print("✓ Form guides already downloaded for today")
+else:
+    print("→ Form guides need to be downloaded")
 
 if os.path.exists(odds_file):
     file_size = os.path.getsize(odds_file)
     print(f"  Odds file size: {file_size} bytes")
-    if file_size > 100:  # Valid file should be more than 100 bytes
-        print("✓ Found existing data - loading...")
+    if file_size > 100:
+        print("✓ Found existing odds data - loading...")
         load_existing_data()
         print(f"  Loaded {len(race_data['odds'])} races with odds")
+        
+        # If we have odds but no form, just download form
+        if not form_exists:
+            print("→ Downloading form guides (odds already exist)...")
+            threading.Thread(target=download_form_guides, daemon=True).start()
     else:
-        print("✗ Odds file too small, will re-scrape...")
+        print("✗ Odds file too small, will refresh...")
         threading.Thread(target=daily_refresh, daemon=True).start()
 else:
     print("✗ No odds data found - triggering initial scrape...")
