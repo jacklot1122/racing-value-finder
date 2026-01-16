@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Racing Value Finder</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #1a1d23;
+            --bg-card: #242830;
+            --bg-card-hover: #2d323c;
+            --text-primary: #ffffff;
+            --text-secondary: #8b929a;
+            --accent-green: #00d97e;
+            --accent-red: #e63757;
+            --accent-blue: #2c7be5;
+            --accent-yellow: #f6c343;
+            --accent-purple: #6b5eae;
+        }
+        
+        body {
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background: var(--bg-card) !important;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+        }
+        
+        .card {
+            background: var(--bg-card);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+        
+        .card-header {
+            background: transparent;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            font-weight: 600;
+        }
+        
+        .stat-card {
+            text-align: center;
+            padding: 1.5rem;
+        }
+        
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+        
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .value-pick {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            border-left: 4px solid var(--accent-green);
+            transition: background 0.2s;
+        }
+        
+        .value-pick:hover {
+            background: var(--bg-card-hover);
+        }
+        
+        .dud-alert {
+            border-left-color: var(--accent-red);
+        }
+        
+        .arb-card {
+            border-left-color: var(--accent-yellow);
+            position: relative;
+        }
+        
+        .arb-card.active {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(246, 195, 67, 0.4); }
+            50% { box-shadow: 0 0 0 10px rgba(246, 195, 67, 0); }
+        }
+        
+        .edge-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .edge-positive {
+            background: rgba(0, 217, 126, 0.2);
+            color: var(--accent-green);
+        }
+        
+        .edge-negative {
+            background: rgba(230, 55, 87, 0.2);
+            color: var(--accent-red);
+        }
+        
+        .odds-badge {
+            background: var(--accent-blue);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+        
+        .star-rating {
+            color: var(--accent-yellow);
+        }
+        
+        .btn-primary {
+            background: var(--accent-blue);
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            background: #1a68d1;
+        }
+        
+        .btn-success {
+            background: var(--accent-green);
+            border: none;
+        }
+        
+        .btn-warning {
+            background: var(--accent-yellow);
+            border: none;
+            color: #000;
+        }
+        
+        .form-control, .form-select {
+            background: var(--bg-dark);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: var(--text-primary);
+        }
+        
+        .form-control:focus, .form-select:focus {
+            background: var(--bg-dark);
+            border-color: var(--accent-blue);
+            color: var(--text-primary);
+            box-shadow: 0 0 0 0.2rem rgba(44, 123, 229, 0.25);
+        }
+        
+        .table {
+            color: var(--text-primary);
+        }
+        
+        .table thead th {
+            border-bottom: 2px solid rgba(255,255,255,0.2);
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+        }
+        
+        .table td {
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            vertical-align: middle;
+        }
+        
+        .horse-name {
+            font-weight: 600;
+        }
+        
+        .bookmaker-tag {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+        
+        .nav-pills .nav-link {
+            color: var(--text-secondary);
+            border-radius: 8px;
+        }
+        
+        .nav-pills .nav-link.active {
+            background: var(--accent-blue);
+            color: white;
+        }
+        
+        .progress {
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+        }
+        
+        .progress-bar {
+            border-radius: 4px;
+        }
+        
+        .modal-content {
+            background: var(--bg-card);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .modal-header {
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .modal-footer {
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .loading-spinner {
+            display: none;
+        }
+        
+        .loading .loading-spinner {
+            display: inline-block;
+        }
+        
+        .refresh-time {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        
+        .monitoring-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: var(--accent-green);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        
+        .dutch-result {
+            background: var(--bg-dark);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .stake-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .stake-row:last-child {
+            border-bottom: none;
+        }
+        
+        .profit-positive {
+            color: var(--accent-green);
+        }
+        
+        .profit-negative {
+            color: var(--accent-red);
+        }
+        
+        .venue-header {
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+        
+        #toast-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 9999;
+        }
+        
+        .toast {
+            background: var(--bg-card);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .form-check-input:checked {
+            background-color: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-trophy-fill text-warning me-2"></i>
+                Racing Value Finder
+            </a>
+            <div class="d-flex align-items-center">
+                <span class="refresh-time me-3">
+                    Last updated: <span id="lastUpdated">--:--:--</span>
+                </span>
+                <button class="btn btn-outline-light btn-sm" onclick="refreshData()">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid py-4">
+        <!-- Stats Row -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-3 col-sm-6">
+                <div class="card stat-card">
+                    <div class="stat-value text-primary" id="totalRaces">0</div>
+                    <div class="stat-label">Races Analyzed</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="card stat-card">
+                    <div class="stat-value text-success" id="valuePicks">0</div>
+                    <div class="stat-label">Value Picks</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="card stat-card">
+                    <div class="stat-value text-warning" id="arbCount">0</div>
+                    <div class="stat-label">Arb Opportunities</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="card stat-card">
+                    <div class="stat-value text-danger" id="dudCount">0</div>
+                    <div class="stat-label">Dud Favourites</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="row g-4">
+            <!-- Left Column - Value Picks & Duds -->
+            <div class="col-lg-6">
+                <!-- Value Picks -->
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-gem text-success me-2"></i>Value Picks</span>
+                        <span class="badge bg-success" id="valuePicksBadge">0</span>
+                    </div>
+                    <div class="card-body" id="valuePicksContainer" style="max-height: 400px; overflow-y: auto;">
+                        <div class="text-center text-secondary py-4">
+                            <i class="bi bi-hourglass-split"></i> Loading...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dud Favourites -->
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-exclamation-triangle text-danger me-2"></i>Dud Favourite Alerts</span>
+                        <span class="badge bg-danger" id="dudBadge">0</span>
+                    </div>
+                    <div class="card-body" id="dudContainer" style="max-height: 300px; overflow-y: auto;">
+                        <div class="text-center text-secondary py-4">
+                            <i class="bi bi-hourglass-split"></i> Loading...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column - Arb & Dutch Calculator -->
+            <div class="col-lg-6">
+                <!-- Arbitrage Opportunities -->
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-cash-stack text-warning me-2"></i>Arbitrage Opportunities</span>
+                        <span class="badge bg-warning text-dark" id="arbBadge">0</span>
+                    </div>
+                    <div class="card-body" id="arbContainer" style="max-height: 350px; overflow-y: auto;">
+                        <div class="text-center text-secondary py-4">
+                            <i class="bi bi-hourglass-split"></i> Loading...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dutch Calculator -->
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-calculator text-primary me-2"></i>Dutching Calculator
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Bankroll ($)</label>
+                                <input type="number" class="form-control" id="bankrollInput" value="100" min="1">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Venue</label>
+                                <select class="form-select" id="venueSelect" onchange="updateRaceSelect()">
+                                    <option value="">Select venue...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Race</label>
+                                <select class="form-select" id="raceSelect" onchange="loadRaceForDutch()">
+                                    <option value="">Select race...</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div id="dutchHorsesContainer" class="mb-3" style="max-height: 200px; overflow-y: auto;">
+                            <p class="text-secondary text-center">Select a race to see horses</p>
+                        </div>
+                        
+                        <button class="btn btn-primary w-100" onclick="calculateDutch()">
+                            <i class="bi bi-calculator me-2"></i>Calculate Stakes
+                        </button>
+                        
+                        <div id="dutchResultContainer"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- All Races Table -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-list-ul me-2"></i>All Races
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover" id="racesTable">
+                                <thead>
+                                    <tr>
+                                        <th>Venue</th>
+                                        <th>Race</th>
+                                        <th>Field</th>
+                                        <th>Overround</th>
+                                        <th>Top Pick</th>
+                                        <th>Favourite</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="racesTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Race Detail Modal -->
+    <div class="modal fade" id="raceModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="raceModalTitle">Race Details</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="raceModalBody">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="dutchFromModal()">
+                        <i class="bi bi-calculator me-2"></i>Dutch Selected
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        let appData = {
+            races: [],
+            odds: [],
+            value_picks: [],
+            arb_opportunities: [],
+            dud_favourites: []
+        };
+        
+        let currentRace = null;
+        let socket = null;
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadData();
+            initSocket();
+        });
+        
+        function initSocket() {
+            socket = io();
+            
+            socket.on('connect', function() {
+                console.log('Connected to server');
+            });
+            
+            socket.on('arb_update', function(data) {
+                updateArbOpportunity(data);
+                showToast('Arb Updated', `${data.venue} R${data.race_number}: ${data.status}`, 
+                    data.status === 'active' ? 'success' : 'warning');
+            });
+        }
+        
+        async function loadData() {
+            try {
+                const response = await fetch('/api/data');
+                appData = await response.json();
+                
+                document.getElementById('lastUpdated').textContent = appData.last_updated || '--:--:--';
+                document.getElementById('totalRaces').textContent = appData.total_races || 0;
+                document.getElementById('valuePicks').textContent = appData.value_picks?.length || 0;
+                document.getElementById('arbCount').textContent = appData.arb_opportunities?.length || 0;
+                document.getElementById('dudCount').textContent = appData.dud_favourites?.length || 0;
+                
+                document.getElementById('valuePicksBadge').textContent = appData.value_picks?.length || 0;
+                document.getElementById('arbBadge').textContent = appData.arb_opportunities?.length || 0;
+                document.getElementById('dudBadge').textContent = appData.dud_favourites?.length || 0;
+                
+                renderValuePicks();
+                renderDudFavourites();
+                renderArbOpportunities();
+                renderRacesTable();
+                populateVenueSelect();
+                
+            } catch (error) {
+                console.error('Error loading data:', error);
+                showToast('Error', 'Failed to load data', 'danger');
+            }
+        }
+        
+        async function refreshData() {
+            showToast('Refreshing', 'Updating data...', 'info');
+            try {
+                await fetch('/api/refresh');
+                await loadData();
+                showToast('Success', 'Data refreshed', 'success');
+            } catch (error) {
+                showToast('Error', 'Failed to refresh', 'danger');
+            }
+        }
+        
+        function renderValuePicks() {
+            const container = document.getElementById('valuePicksContainer');
+            
+            if (!appData.value_picks || appData.value_picks.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-secondary py-4">
+                        <i class="bi bi-search" style="font-size: 2rem;"></i>
+                        <p class="mt-2">No value picks found today</p>
+                    </div>`;
+                return;
+            }
+            
+            let html = '';
+            appData.value_picks.forEach(pick => {
+                const stars = '★'.repeat(pick.value_rating) + '☆'.repeat(5 - pick.value_rating);
+                html += `
+                    <div class="value-pick" onclick="viewRace('${pick.venue}', ${pick.race_number})">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <span class="text-secondary">${pick.venue} R${pick.race_number}</span>
+                                <h6 class="horse-name mb-1">${pick.horse}</h6>
+                                <small class="bookmaker-tag">Best at ${pick.best_at}</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="odds-badge">$${pick.best_odds.toFixed(2)}</span>
+                                <div class="mt-1">
+                                    <span class="edge-badge edge-positive">+${(pick.edge * 100).toFixed(1)}% edge</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-2 d-flex justify-content-between align-items-center">
+                            <div>
+                                <small class="text-secondary">Fair: $${pick.fair_odds}</small>
+                                <small class="text-secondary ms-2">Win: ${(pick.model_prob * 100).toFixed(0)}%</small>
+                            </div>
+                            <span class="star-rating">${stars}</span>
+                        </div>
+                    </div>`;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function renderDudFavourites() {
+            const container = document.getElementById('dudContainer');
+            
+            if (!appData.dud_favourites || appData.dud_favourites.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-secondary py-4">
+                        <i class="bi bi-shield-check" style="font-size: 2rem;"></i>
+                        <p class="mt-2">No dud favourites detected</p>
+                    </div>`;
+                return;
+            }
+            
+            let html = '';
+            appData.dud_favourites.forEach(dud => {
+                html += `
+                    <div class="value-pick dud-alert" onclick="viewRace('${dud.venue}', ${dud.race_number})">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <span class="text-secondary">${dud.venue} R${dud.race_number}</span>
+                                <h6 class="horse-name mb-1 text-danger">
+                                    <i class="bi bi-exclamation-circle me-1"></i>${dud.favourite}
+                                </h6>
+                                <small class="text-secondary">Favourite @ $${dud.odds.toFixed(2)}</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="edge-badge edge-negative">${(dud.edge * 100).toFixed(1)}% edge</span>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-secondary">Model: ${(dud.model_prob * 100).toFixed(0)}%</small>
+                            <small class="text-secondary ms-2">Market: ${(dud.implied_prob * 100).toFixed(0)}%</small>
+                        </div>
+                        <div class="mt-1">
+                            <small class="text-success">Better picks: ${dud.better_picks.join(', ')}</small>
+                        </div>
+                    </div>`;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function renderArbOpportunities() {
+            const container = document.getElementById('arbContainer');
+            
+            if (!appData.arb_opportunities || appData.arb_opportunities.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-secondary py-4">
+                        <i class="bi bi-graph-up" style="font-size: 2rem;"></i>
+                        <p class="mt-2">No arbitrage opportunities found</p>
+                        <small>Markets are efficient - keep checking!</small>
+                    </div>`;
+                return;
+            }
+            
+            let html = '';
+            appData.arb_opportunities.forEach(arb => {
+                const statusClass = arb.status === 'active' ? 'active' : '';
+                html += `
+                    <div class="value-pick arb-card ${statusClass}" id="arb-${arb.venue}-${arb.race_number}">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <span class="text-secondary">${arb.venue} R${arb.race_number}</span>
+                                <h6 class="mb-1 text-warning">
+                                    <i class="bi bi-lightning-fill me-1"></i>
+                                    ${arb.guaranteed_profit_pct.toFixed(2)}% Guaranteed Profit
+                                </h6>
+                                <small class="text-secondary">Field: ${arb.field_size} runners</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge ${arb.status === 'active' ? 'bg-success' : 'bg-secondary'}">
+                                    ${arb.status}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="mt-2 d-flex justify-content-between align-items-center">
+                            <small class="text-secondary">Dutch book: ${arb.dutch_book.toFixed(4)}</small>
+                            <small class="text-secondary">Checked: ${arb.last_checked}</small>
+                        </div>
+                        <div class="mt-2 d-flex gap-2">
+                            <button class="btn btn-sm btn-primary flex-grow-1" 
+                                onclick="viewRace('${arb.venue}', ${arb.race_number})">
+                                <i class="bi bi-eye me-1"></i>View
+                            </button>
+                            <button class="btn btn-sm btn-warning flex-grow-1"
+                                onclick="startArbMonitor('${arb.venue}', ${arb.race_number}, '${arb.url}')">
+                                <i class="bi bi-broadcast me-1"></i>Monitor
+                            </button>
+                            <button class="btn btn-sm btn-success flex-grow-1"
+                                onclick="dutchArb('${arb.venue}', ${arb.race_number})">
+                                <i class="bi bi-calculator me-1"></i>Dutch
+                            </button>
+                        </div>
+                    </div>`;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function renderRacesTable() {
+            const tbody = document.getElementById('racesTableBody');
+            
+            if (!appData.odds || appData.odds.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-secondary">No races loaded</td></tr>';
+                return;
+            }
+            
+            // Group by venue
+            const venues = {};
+            appData.odds.forEach(race => {
+                if (!venues[race.venue]) venues[race.venue] = [];
+                venues[race.venue].push(race);
+            });
+            
+            let html = '';
+            Object.entries(venues).forEach(([venue, races]) => {
+                races.sort((a, b) => a.race_number - b.race_number);
+                races.forEach(race => {
+                    const horses = race.horses || [];
+                    const validHorses = horses.filter(h => h.best_odds && h.best_odds < 500);
+                    const dutchBook = validHorses.reduce((sum, h) => sum + (1 / h.best_odds), 0);
+                    const overround = ((dutchBook - 1) * 100).toFixed(1);
+                    
+                    // Get favourite
+                    const favourite = validHorses.reduce((fav, h) => 
+                        (!fav || h.best_odds < fav.best_odds) ? h : fav, null);
+                    
+                    // Find form data for top pick
+                    let topPick = '-';
+                    const formRace = appData.races.find(r => 
+                        r.venue.toLowerCase() === venue.toLowerCase() && r.race_number === race.race_number);
+                    if (formRace && formRace.horses && formRace.horses.length > 0) {
+                        const sorted = [...formRace.horses].sort((a, b) => (b.form_score || 0) - (a.form_score || 0));
+                        topPick = sorted[0]?.name || '-';
+                    }
+                    
+                    html += `
+                        <tr onclick="viewRace('${venue}', ${race.race_number})" style="cursor: pointer;">
+                            <td><strong>${venue}</strong></td>
+                            <td>R${race.race_number}</td>
+                            <td>${validHorses.length}</td>
+                            <td>
+                                <span class="${dutchBook < 1 ? 'text-success' : ''}">${overround}%</span>
+                                ${dutchBook < 1 ? '<i class="bi bi-lightning-fill text-warning ms-1"></i>' : ''}
+                            </td>
+                            <td>${topPick.substring(0, 15)}</td>
+                            <td>
+                                ${favourite ? `${favourite.name.substring(0, 12)} <span class="odds-badge">$${favourite.best_odds}</span>` : '-'}
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); viewRace('${venue}', ${race.race_number})">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </td>
+                        </tr>`;
+                });
+            });
+            
+            tbody.innerHTML = html;
+        }
+        
+        function populateVenueSelect() {
+            const select = document.getElementById('venueSelect');
+            const venues = [...new Set(appData.odds.map(r => r.venue))].sort();
+            
+            select.innerHTML = '<option value="">Select venue...</option>';
+            venues.forEach(v => {
+                select.innerHTML += `<option value="${v}">${v}</option>`;
+            });
+        }
+        
+        function updateRaceSelect() {
+            const venue = document.getElementById('venueSelect').value;
+            const select = document.getElementById('raceSelect');
+            
+            select.innerHTML = '<option value="">Select race...</option>';
+            document.getElementById('dutchHorsesContainer').innerHTML = 
+                '<p class="text-secondary text-center">Select a race to see horses</p>';
+            
+            if (!venue) return;
+            
+            const races = appData.odds.filter(r => r.venue === venue).sort((a, b) => a.race_number - b.race_number);
+            races.forEach(r => {
+                select.innerHTML += `<option value="${r.race_number}">Race ${r.race_number}</option>`;
+            });
+        }
+        
+        async function loadRaceForDutch() {
+            const venue = document.getElementById('venueSelect').value;
+            const raceNum = parseInt(document.getElementById('raceSelect').value);
+            
+            if (!venue || !raceNum) return;
+            
+            try {
+                const response = await fetch(`/api/race/${encodeURIComponent(venue)}/${raceNum}`);
+                const race = await response.json();
+                
+                currentRace = race;
+                
+                let html = '';
+                race.horses.forEach(h => {
+                    if (!h.best_odds || h.best_odds >= 500) return;
+                    html += `
+                        <div class="form-check stake-row">
+                            <input class="form-check-input dutch-horse" type="checkbox" 
+                                value="${h.name}" id="dutch-${h.number}" checked>
+                            <label class="form-check-label flex-grow-1" for="dutch-${h.number}">
+                                <strong>${h.number}. ${h.name}</strong>
+                                <small class="text-secondary ms-2">$${h.best_odds}</small>
+                            </label>
+                            <span class="badge bg-secondary">${(h.model_prob * 100).toFixed(0)}%</span>
+                        </div>`;
+                });
+                
+                document.getElementById('dutchHorsesContainer').innerHTML = html || 
+                    '<p class="text-secondary text-center">No horses with valid odds</p>';
+                
+            } catch (error) {
+                console.error('Error loading race:', error);
+            }
+        }
+        
+        async function calculateDutch() {
+            const venue = document.getElementById('venueSelect').value;
+            const raceNum = parseInt(document.getElementById('raceSelect').value);
+            const bankroll = parseFloat(document.getElementById('bankrollInput').value) || 100;
+            
+            if (!venue || !raceNum) {
+                showToast('Error', 'Please select a venue and race', 'warning');
+                return;
+            }
+            
+            // Get selected horses
+            const selectedHorses = [];
+            document.querySelectorAll('.dutch-horse:checked').forEach(cb => {
+                selectedHorses.push(cb.value);
+            });
+            
+            try {
+                const response = await fetch('/api/calculate_dutch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        venue: venue,
+                        race_number: raceNum,
+                        bankroll: bankroll,
+                        horses: selectedHorses
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    showToast('Error', result.error, 'danger');
+                    return;
+                }
+                
+                renderDutchResult(result);
+                
+            } catch (error) {
+                console.error('Error calculating dutch:', error);
+                showToast('Error', 'Failed to calculate', 'danger');
+            }
+        }
+        
+        function renderDutchResult(result) {
+            const container = document.getElementById('dutchResultContainer');
+            
+            let stakesHtml = '';
+            result.stakes.forEach(s => {
+                stakesHtml += `
+                    <div class="stake-row">
+                        <div>
+                            <strong>${s.name}</strong>
+                            <small class="text-secondary ms-2">@ $${s.odds}</small>
+                            <span class="bookmaker-tag d-block">${s.bookmaker}</span>
+                        </div>
+                        <div class="text-end">
+                            <div><strong>$${s.stake.toFixed(2)}</strong></div>
+                            <small class="${s.profit_if_wins >= 0 ? 'profit-positive' : 'profit-negative'}">
+                                ${s.profit_if_wins >= 0 ? '+' : ''}$${s.profit_if_wins.toFixed(2)}
+                            </small>
+                        </div>
+                    </div>`;
+            });
+            
+            container.innerHTML = `
+                <div class="dutch-result">
+                    <div class="d-flex justify-content-between mb-3">
+                        <div>
+                            <h6 class="mb-0">${result.venue} R${result.race_number}</h6>
+                            <small class="text-secondary">Bankroll: $${result.bankroll}</small>
+                        </div>
+                        <div class="text-end">
+                            ${result.is_arb ? 
+                                `<span class="badge bg-success">ARBITRAGE</span>
+                                 <div class="profit-positive mt-1">
+                                    +$${result.guaranteed_profit.toFixed(2)} guaranteed
+                                 </div>` :
+                                `<span class="badge bg-secondary">Overround: ${result.overround_pct}%</span>`
+                            }
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <small class="text-secondary">Dutch Book: ${result.dutch_book.toFixed(4)}</small>
+                        <span class="ms-3 ${result.roi >= 0 ? 'profit-positive' : 'profit-negative'}">
+                            ROI: ${result.roi >= 0 ? '+' : ''}${result.roi.toFixed(1)}%
+                        </span>
+                    </div>
+                    
+                    <h6 class="text-secondary mb-2">Stakes</h6>
+                    ${stakesHtml}
+                    
+                    <div class="mt-3 text-end">
+                        <strong>Total: $${result.total_stake.toFixed(2)}</strong>
+                    </div>
+                </div>`;
+        }
+        
+        async function viewRace(venue, raceNum) {
+            try {
+                const response = await fetch(`/api/race/${encodeURIComponent(venue)}/${raceNum}`);
+                const race = await response.json();
+                
+                currentRace = race;
+                
+                document.getElementById('raceModalTitle').textContent = 
+                    `${venue} - Race ${raceNum}: ${race.race_name}`;
+                
+                let tableHtml = `
+                    <div class="mb-3">
+                        <span class="badge bg-primary">Field: ${race.field_size}</span>
+                        <span class="badge ${race.is_arb ? 'bg-success' : 'bg-secondary'} ms-2">
+                            Overround: ${race.overround_pct}%
+                        </span>
+                        ${race.is_arb ? '<span class="badge bg-warning text-dark ms-2">ARBITRAGE!</span>' : ''}
+                    </div>
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" class="form-check-input" id="selectAll" 
+                                    onchange="toggleAllHorses(this)" checked></th>
+                                <th>#</th>
+                                <th>Horse</th>
+                                <th>Form</th>
+                                <th>Model %</th>
+                                <th>Best Odds</th>
+                                <th>At</th>
+                                <th>Edge</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+                
+                race.horses.forEach(h => {
+                    if (!h.best_odds || h.best_odds >= 500) return;
+                    
+                    const implied = 1 / h.best_odds;
+                    const edge = h.model_prob - implied;
+                    const edgeClass = edge > 0.02 ? 'edge-positive' : (edge < -0.02 ? 'edge-negative' : '');
+                    
+                    tableHtml += `
+                        <tr>
+                            <td><input type="checkbox" class="form-check-input modal-horse" 
+                                value="${h.name}" checked></td>
+                            <td>${h.number}</td>
+                            <td>
+                                <strong>${h.name}</strong>
+                                <small class="d-block text-secondary">${h.jockey || ''}</small>
+                            </td>
+                            <td><code>${h.form || '-'}</code></td>
+                            <td>${(h.model_prob * 100).toFixed(1)}%</td>
+                            <td><span class="odds-badge">$${h.best_odds.toFixed(2)}</span></td>
+                            <td><small>${h.best_bookmaker}</small></td>
+                            <td><span class="edge-badge ${edgeClass}">${(edge * 100).toFixed(1)}%</span></td>
+                        </tr>`;
+                });
+                
+                tableHtml += '</tbody></table>';
+                
+                document.getElementById('raceModalBody').innerHTML = tableHtml;
+                
+                new bootstrap.Modal(document.getElementById('raceModal')).show();
+                
+            } catch (error) {
+                console.error('Error loading race:', error);
+                showToast('Error', 'Failed to load race details', 'danger');
+            }
+        }
+        
+        function toggleAllHorses(cb) {
+            document.querySelectorAll('.modal-horse').forEach(h => h.checked = cb.checked);
+        }
+        
+        async function dutchFromModal() {
+            if (!currentRace) return;
+            
+            const bankroll = parseFloat(document.getElementById('bankrollInput').value) || 100;
+            const selectedHorses = [];
+            document.querySelectorAll('.modal-horse:checked').forEach(cb => {
+                selectedHorses.push(cb.value);
+            });
+            
+            try {
+                const response = await fetch('/api/calculate_dutch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        venue: currentRace.venue,
+                        race_number: currentRace.race_number,
+                        bankroll: bankroll,
+                        horses: selectedHorses
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    showToast('Error', result.error, 'danger');
+                    return;
+                }
+                
+                // Close modal and show result in calculator
+                bootstrap.Modal.getInstance(document.getElementById('raceModal')).hide();
+                
+                document.getElementById('venueSelect').value = currentRace.venue;
+                updateRaceSelect();
+                document.getElementById('raceSelect').value = currentRace.race_number;
+                
+                renderDutchResult(result);
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showToast('Error', 'Failed to calculate', 'danger');
+            }
+        }
+        
+        async function dutchArb(venue, raceNum) {
+            document.getElementById('venueSelect').value = venue;
+            updateRaceSelect();
+            setTimeout(() => {
+                document.getElementById('raceSelect').value = raceNum;
+                loadRaceForDutch();
+                setTimeout(() => calculateDutch(), 500);
+            }, 100);
+        }
+        
+        async function startArbMonitor(venue, raceNum, url) {
+            try {
+                const response = await fetch('/api/start_arb_monitor', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        venue: venue,
+                        race_number: raceNum,
+                        url: url
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'started') {
+                    showToast('Monitoring', `Now monitoring ${venue} R${raceNum} (every 2 min)`, 'success');
+                    
+                    // Add monitoring badge
+                    const card = document.getElementById(`arb-${venue}-${raceNum}`);
+                    if (card && !card.querySelector('.monitoring-badge')) {
+                        card.insertAdjacentHTML('afterbegin', 
+                            '<span class="monitoring-badge"><i class="bi bi-broadcast"></i> Live</span>');
+                    }
+                } else if (result.status === 'already_monitoring') {
+                    showToast('Info', 'Already monitoring this race', 'info');
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showToast('Error', 'Failed to start monitoring', 'danger');
+            }
+        }
+        
+        function updateArbOpportunity(arb) {
+            const card = document.getElementById(`arb-${arb.venue}-${arb.race_number}`);
+            if (!card) return;
+            
+            // Update status badge
+            const statusBadge = card.querySelector('.badge');
+            if (statusBadge) {
+                statusBadge.className = `badge ${arb.status === 'active' ? 'bg-success' : 'bg-secondary'}`;
+                statusBadge.textContent = arb.status;
+            }
+            
+            // Update profit
+            const profitEl = card.querySelector('h6');
+            if (profitEl) {
+                profitEl.innerHTML = `
+                    <i class="bi bi-lightning-fill me-1"></i>
+                    ${arb.guaranteed_profit_pct.toFixed(2)}% Guaranteed Profit`;
+            }
+            
+            // Update timestamp
+            const timeEl = card.querySelector('small:last-of-type');
+            if (timeEl && timeEl.textContent.includes('Checked:')) {
+                timeEl.textContent = `Checked: ${arb.last_checked}`;
+            }
+            
+            // Visual feedback
+            card.style.transition = 'background 0.5s';
+            card.style.background = arb.status === 'active' ? 
+                'rgba(0, 217, 126, 0.1)' : 'rgba(230, 55, 87, 0.1)';
+            setTimeout(() => card.style.background = '', 1000);
+        }
+        
+        function showToast(title, message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const id = 'toast-' + Date.now();
+            
+            const bgClass = {
+                'success': 'bg-success',
+                'danger': 'bg-danger', 
+                'warning': 'bg-warning',
+                'info': 'bg-primary'
+            }[type] || 'bg-primary';
+            
+            container.insertAdjacentHTML('beforeend', `
+                <div id="${id}" class="toast" role="alert">
+                    <div class="toast-header ${bgClass} text-white">
+                        <strong class="me-auto">${title}</strong>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+                    </div>
+                    <div class="toast-body">${message}</div>
+                </div>`);
+            
+            const toastEl = document.getElementById(id);
+            const toast = new bootstrap.Toast(toastEl, { delay: 4000 });
+            toast.show();
+            
+            toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+        }
+    </script>
+</body>
+</html>
