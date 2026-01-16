@@ -530,6 +530,44 @@
             color: var(--text-muted);
         }
         
+        /* Scraping Status Banner */
+        .scraping-banner {
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+            color: white;
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            animation: pulse 2s infinite;
+        }
+        
+        .scraping-banner.hidden {
+            display: none;
+        }
+        
+        .scraping-progress {
+            flex: 1;
+            max-width: 300px;
+        }
+        
+        .scraping-progress .progress {
+            height: 8px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .scraping-progress .progress-bar {
+            background: white;
+            transition: width 0.5s ease;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.85; }
+        }
+        
         /* Animations */
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
@@ -542,6 +580,23 @@
     </style>
 </head>
 <body>
+    <!-- Scraping Status Banner -->
+    <div id="scrapingBanner" class="scraping-banner hidden">
+        <div class="d-flex align-items-center gap-3">
+            <div class="spinner-border spinner-border-sm" role="status"></div>
+            <div>
+                <strong id="scrapingStep">Scraping data...</strong>
+                <div class="small opacity-75" id="scrapingTime">Estimated time: calculating...</div>
+            </div>
+        </div>
+        <div class="scraping-progress">
+            <div class="progress">
+                <div class="progress-bar" id="scrapingProgressBar" style="width: 0%"></div>
+            </div>
+            <div class="text-end small mt-1" id="scrapingPercent">0%</div>
+        </div>
+    </div>
+
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
         <div class="container-fluid px-4">
@@ -554,7 +609,7 @@
                     <i class="bi bi-broadcast-pin"></i>
                     <span>Updated: <strong id="lastUpdated">--:--:--</strong></span>
                 </span>
-                <button class="btn btn-outline-light btn-sm" onclick="refreshData()">
+                <button class="btn btn-outline-light btn-sm" onclick="refreshData()" id="refreshBtn">
                     <i class="bi bi-arrow-clockwise me-1"></i> Refresh
                 </button>
             </div>
@@ -754,6 +809,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             loadData();
             initSocket();
+            checkScrapeStatus(); // Check if scraping is in progress on load
         });
         
         function initSocket() {
@@ -767,6 +823,11 @@
                 updateArbOpportunity(data);
                 showToast('Market Update', `${data.venue} R${data.race_number}: ${data.status}`, 
                     data.status === 'active' ? 'success' : 'warning');
+            });
+            
+            socket.on('data_refreshed', function(data) {
+                showToast('Data Updated', 'Fresh race data loaded', 'success');
+                loadData();
             });
         }
         
@@ -797,14 +858,59 @@
             }
         }
         
-        async function refreshData() {
-            showToast('Refreshing', 'Updating data...', 'info');
+        // Check scraping status periodically
+        let scrapeStatusInterval = null;
+        
+        async function checkScrapeStatus() {
             try {
-                await fetch('/api/refresh');
-                await loadData();
-                showToast('Success', 'Data refreshed', 'success');
+                const response = await fetch('/api/scrape_status');
+                const status = await response.json();
+                
+                const banner = document.getElementById('scrapingBanner');
+                const refreshBtn = document.getElementById('refreshBtn');
+                
+                if (status.is_scraping) {
+                    banner.classList.remove('hidden');
+                    refreshBtn.disabled = true;
+                    refreshBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Scraping...';
+                    
+                    document.getElementById('scrapingStep').textContent = status.current_step || 'Scraping data...';
+                    document.getElementById('scrapingTime').textContent = status.estimated_time_remaining 
+                        ? `Estimated time remaining: ${status.estimated_time_remaining}` 
+                        : 'Please wait...';
+                    document.getElementById('scrapingProgressBar').style.width = `${status.progress || 0}%`;
+                    document.getElementById('scrapingPercent').textContent = `${status.progress || 0}%`;
+                    
+                    // Start polling if not already
+                    if (!scrapeStatusInterval) {
+                        scrapeStatusInterval = setInterval(checkScrapeStatus, 2000);
+                    }
+                } else {
+                    banner.classList.add('hidden');
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> Refresh';
+                    
+                    // Stop polling
+                    if (scrapeStatusInterval) {
+                        clearInterval(scrapeStatusInterval);
+                        scrapeStatusInterval = null;
+                        // Reload data after scraping completes
+                        await loadData();
+                    }
+                }
             } catch (error) {
-                showToast('Error', 'Failed to refresh', 'danger');
+                console.error('Error checking scrape status:', error);
+            }
+        }
+        
+        async function refreshData() {
+            showToast('Refreshing', 'Starting data scrape...', 'info');
+            try {
+                await fetch('/api/scrape_now', { method: 'POST' });
+                // Start checking status
+                checkScrapeStatus();
+            } catch (error) {
+                showToast('Error', 'Failed to start scrape', 'danger');
             }
         }
         

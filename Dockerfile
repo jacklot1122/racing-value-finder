@@ -1,5 +1,6 @@
 FROM python:3.11-slim
 
+# Force rebuild - v2
 # Install system dependencies for Playwright
 RUN apt-get update && apt-get install -y \
     wget \

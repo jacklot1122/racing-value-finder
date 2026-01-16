@@ -40,6 +40,20 @@ race_data = {
     'loading': False
 }
 
+# Scraping status
+scrape_status = {
+    'is_scraping': False,
+    'started_at': None,
+    'current_step': '',
+    'progress': 0,
+    'total_meetings': 0,
+    'meetings_done': 0,
+    'total_races': 0,
+    'races_done': 0,
+    'estimated_time_remaining': None,
+    'error': None
+}
+
 # Active arb monitoring threads
 arb_monitors = {}
 
@@ -76,25 +90,53 @@ def cleanup_old_data():
 
 def daily_refresh():
     """Daily task to refresh form data - runs at 5 AM Sydney time"""
+    global scrape_status
+    
     print(f"[{get_sydney_time()}] Starting daily data refresh...")
     
-    # Clean up old data folders
-    cleanup_old_data()
+    # Update scrape status
+    scrape_status['is_scraping'] = True
+    scrape_status['started_at'] = get_sydney_time().isoformat()
+    scrape_status['current_step'] = 'Cleaning up old data...'
+    scrape_status['progress'] = 5
+    scrape_status['error'] = None
     
-    # Scrape new data for today
-    scrape_todays_races()
+    try:
+        # Clean up old data folders
+        cleanup_old_data()
+        
+        scrape_status['current_step'] = 'Scraping race meetings...'
+        scrape_status['progress'] = 10
+        
+        # Scrape new data for today
+        scrape_todays_races()
+        
+        scrape_status['current_step'] = 'Analyzing data...'
+        scrape_status['progress'] = 90
+        
+        # Reload data into memory
+        load_existing_data()
+        
+        scrape_status['current_step'] = 'Complete!'
+        scrape_status['progress'] = 100
+        
+        # Notify connected clients
+        socketio.emit('data_refreshed', {'time': get_sydney_time().strftime("%H:%M:%S")})
+        
+        print(f"[{get_sydney_time()}] Daily refresh complete!")
+        
+    except Exception as e:
+        scrape_status['error'] = str(e)
+        print(f"[{get_sydney_time()}] Error during refresh: {e}")
     
-    # Reload data into memory
-    load_existing_data()
-    
-    # Notify connected clients
-    socketio.emit('data_refreshed', {'time': get_sydney_time().strftime("%H:%M:%S")})
-    
-    print(f"[{get_sydney_time()}] Daily refresh complete!")
+    finally:
+        scrape_status['is_scraping'] = False
 
 
 def scrape_todays_races():
     """Scrape today's race meetings and odds"""
+    global scrape_status
+    
     folder = get_data_folder()
     os.makedirs(folder, exist_ok=True)
     
@@ -108,23 +150,40 @@ def scrape_todays_races():
             )
             page = context.new_page()
             
+            scrape_status['current_step'] = 'Loading racing page...'
+            
             # Go to punters.com.au to get today's meetings
             page.goto("https://www.punters.com.au/racing/", timeout=30000)
             time.sleep(3)
             
-            # Get all meeting links
+            # Get all meeting links - collect URLs first before navigating
             meetings = []
             meeting_links = page.query_selector_all('a[href*="/form-guide/"]')
             
             for link in meeting_links:
-                href = link.get_attribute('href')
-                if href and '/form-guide/' in href:
-                    meetings.append(href)
+                try:
+                    href = link.get_attribute('href')
+                    if href and '/form-guide/' in href and href not in meetings:
+                        meetings.append(href)
+                except:
+                    continue
+            
+            print(f"Found {len(meetings)} meetings to scrape")
+            scrape_status['total_meetings'] = min(len(meetings), 10)
+            scrape_status['meetings_done'] = 0
             
             all_odds = []
             
-            for meeting_url in meetings[:10]:  # Limit to first 10 meetings
+            for idx, meeting_url in enumerate(meetings[:10]):  # Limit to first 10 meetings
                 try:
+                    scrape_status['meetings_done'] = idx
+                    scrape_status['current_step'] = f'Scraping meeting {idx + 1} of {scrape_status["total_meetings"]}...'
+                    scrape_status['progress'] = 10 + int((idx / scrape_status['total_meetings']) * 70)
+                    
+                    # Estimate time remaining (assume ~30 sec per meeting)
+                    remaining_meetings = scrape_status['total_meetings'] - idx
+                    scrape_status['estimated_time_remaining'] = f"{remaining_meetings * 30} seconds"
+                    
                     if not meeting_url.startswith('http'):
                         meeting_url = f"https://www.punters.com.au{meeting_url}"
                     
@@ -135,28 +194,43 @@ def scrape_todays_races():
                     venue_match = re.search(r'/form-guide/([^/]+)/', meeting_url)
                     venue = venue_match.group(1).replace('-', ' ').title() if venue_match else 'Unknown'
                     
-                    # Find race links
+                    scrape_status['current_step'] = f'Scraping {venue} ({idx + 1}/{scrape_status["total_meetings"]})...'
+                    
+                    # Find race links - collect URLs first
+                    race_urls = []
                     race_links = page.query_selector_all('a[href*="/race-"]')
                     
                     for race_link in race_links:
-                        race_href = race_link.get_attribute('href')
-                        race_match = re.search(r'/race-(\d+)', race_href)
-                        if race_match:
-                            race_num = int(race_match.group(1))
-                            
-                            # Scrape odds for this race
-                            horses = scrape_race_odds_page(page, race_href)
-                            
-                            if horses:
-                                all_odds.append({
-                                    'venue': venue,
-                                    'race_number': race_num,
-                                    'horses': horses,
-                                    'url': race_href
-                                })
+                        try:
+                            race_href = race_link.get_attribute('href')
+                            if race_href and race_href not in race_urls:
+                                race_urls.append(race_href)
+                        except:
+                            continue
+                    
+                    # Now navigate to each race URL
+                    for race_href in race_urls:
+                        try:
+                            race_match = re.search(r'/race-(\d+)', race_href)
+                            if race_match:
+                                race_num = int(race_match.group(1))
+                                
+                                # Scrape odds for this race
+                                horses = scrape_race_odds_page(page, race_href)
+                                
+                                if horses:
+                                    all_odds.append({
+                                        'venue': venue,
+                                        'race_number': race_num,
+                                        'horses': horses,
+                                        'url': race_href
+                                    })
+                        except Exception as e:
+                            print(f"Error scraping race {race_href}: {e}")
+                            continue
                                 
                 except Exception as e:
-                    print(f"Error scraping meeting: {e}")
+                    print(f"Error scraping meeting {meeting_url}: {e}")
                     continue
             
             browser.close()
@@ -894,6 +968,12 @@ def get_status():
         'last_updated': race_data['last_updated'],
         'scheduler_running': scheduler.running
     })
+
+
+@app.route('/api/scrape_status')
+def get_scrape_status():
+    """Get current scraping status"""
+    return jsonify(scrape_status)
 
 
 @socketio.on('connect')
