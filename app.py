@@ -16,13 +16,7 @@ from flask_socketio import SocketIO, emit
 # Add parent directory for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Playwright is optional - only used for live odds scraping
-try:
-    from playwright.sync_api import sync_playwright
-    PLAYWRIGHT_AVAILABLE = True
-except ImportError:
-    PLAYWRIGHT_AVAILABLE = False
-    print("Warning: Playwright not available. Live odds scraping disabled.")
+from playwright.sync_api import sync_playwright
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'racing-value-finder-2026')
@@ -252,10 +246,6 @@ def normalize_name(name):
 
 def scrape_race_odds(venue, race_number, url):
     """Scrape current odds for a specific race"""
-    if not PLAYWRIGHT_AVAILABLE:
-        print("Playwright not available - cannot scrape live odds")
-        return None
-    
     try:
         with sync_playwright() as p:
             browser = p.firefox.launch(headless=True)
