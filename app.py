@@ -64,22 +64,36 @@ def get_sydney_time():
 
 
 def get_data_folder(date=None):
-    """Get racing data folder for a specific date"""
+    """Get racing data folder for a specific date
+    Uses /data volume on Railway for persistent storage
+    Falls back to local directory for development
+    """
     if date is None:
         date = get_sydney_time()
     date_str = date.strftime("%Y%m%d")
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(script_dir, f"racing_forms_{date_str}")
+    
+    # Check for Railway persistent volume
+    if os.path.exists('/data'):
+        base_dir = '/data'
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    return os.path.join(base_dir, f"racing_forms_{date_str}")
 
 
 def cleanup_old_data():
     """Delete old racing form folders (older than today)"""
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Check for Railway persistent volume
+    if os.path.exists('/data'):
+        base_dir = '/data'
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    
     today_str = get_sydney_time().strftime("%Y%m%d")
     
-    for folder_name in os.listdir(script_dir):
+    for folder_name in os.listdir(base_dir):
         if folder_name.startswith("racing_forms_") and folder_name != f"racing_forms_{today_str}":
-            folder_path = os.path.join(script_dir, folder_name)
+            folder_path = os.path.join(base_dir, folder_name)
             if os.path.isdir(folder_path):
                 try:
                     shutil.rmtree(folder_path)
@@ -175,6 +189,7 @@ def scrape_todays_races():
                     continue
             
             print(f"Found {len(meetings)} meetings to scrape")
+            print(f"Meeting URLs: {meetings[:5]}")  # Debug: show URLs
             scrape_status['total_meetings'] = min(len(meetings), 10)
             scrape_status['meetings_done'] = 0
             
@@ -192,13 +207,28 @@ def scrape_todays_races():
                     if not meeting_url.startswith('http'):
                         meeting_url = f"https://www.punters.com.au{meeting_url}"
                     
-                    # Extract venue name from URL BEFORE navigating
+                    # Extract venue name from URL
                     venue = 'Unknown'
-                    # Pattern: /form-guide/venue-name/ or /form-guide/venue-name
-                    parts = meeting_url.split('/form-guide/')
-                    if len(parts) > 1:
-                        venue_part = parts[1].split('/')[0]
-                        venue = venue_part.replace('-', ' ').title()
+                    print(f"DEBUG: Parsing URL: {meeting_url}")
+                    
+                    # Try multiple patterns
+                    # Pattern 1: /form-guide/venue-name/
+                    if '/form-guide/' in meeting_url:
+                        parts = meeting_url.split('/form-guide/')
+                        if len(parts) > 1 and parts[1]:
+                            venue_part = parts[1].strip('/').split('/')[0]
+                            if venue_part:
+                                venue = venue_part.replace('-', ' ').title()
+                    
+                    # Pattern 2: /racing/venue-name/ 
+                    if venue == 'Unknown' and '/racing/' in meeting_url:
+                        parts = meeting_url.split('/racing/')
+                        if len(parts) > 1 and parts[1]:
+                            venue_part = parts[1].strip('/').split('/')[0]
+                            if venue_part and venue_part != 'form-guide':
+                                venue = venue_part.replace('-', ' ').title()
+                    
+                    print(f"DEBUG: Extracted venue: {venue}")
                     
                     scrape_status['current_step'] = f'Scraping {venue} ({idx + 1}/{scrape_status["total_meetings"]})...'
                     
@@ -209,6 +239,17 @@ def scrape_todays_races():
                     
                     page.goto(meeting_url, timeout=30000)
                     time.sleep(2)
+                    
+                    # Try to get venue from page if still unknown
+                    if venue == 'Unknown':
+                        try:
+                            # Try h1 or title element
+                            h1 = page.query_selector('h1')
+                            if h1:
+                                venue = h1.inner_text().split(' - ')[0].split(' Race')[0].strip()
+                                print(f"DEBUG: Got venue from page: {venue}")
+                        except:
+                            pass
                     
                     # Find race links - collect URLs first
                     race_urls = []
