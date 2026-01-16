@@ -49,6 +49,7 @@ EXPOSE 8080
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
+ENV PORT=8080
 
 # Run the application - Railway provides PORT env variable
-CMD gunicorn --worker-class eventlet -w 1 app:app --bind 0.0.0.0:${PORT:-8080}
+CMD ["/bin/sh", "-c", "gunicorn --worker-class eventlet -w 1 app:app --bind 0.0.0.0:$PORT"]

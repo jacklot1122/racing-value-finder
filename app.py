@@ -8,10 +8,14 @@ import sys
 import json
 import time
 import re
+import shutil
 import threading
 from datetime import datetime
+import pytz
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO, emit
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 # Add parent directory for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,6 +25,9 @@ from playwright.sync_api import sync_playwright
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'racing-value-finder-2026')
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Sydney timezone
+SYDNEY_TZ = pytz.timezone('Australia/Sydney')
 
 # Global data storage
 race_data = {
@@ -37,11 +44,222 @@ race_data = {
 arb_monitors = {}
 
 
-def get_data_folder():
-    """Get today's racing data folder"""
-    today = datetime.now().strftime("%Y%m%d")
-    script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(script_dir, f"racing_forms_{today}")
+def get_sydney_time():
+    """Get current time in Sydney"""
+    return datetime.now(SYDNEY_TZ)
+
+
+def get_data_folder(date=None):
+    """Get racing data folder for a specific date"""
+    if date is None:
+        date = get_sydney_time()
+    date_str = date.strftime("%Y%m%d")
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(script_dir, f"racing_forms_{date_str}")
+
+
+def cleanup_old_data():
+    """Delete old racing form folders (older than today)"""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    today_str = get_sydney_time().strftime("%Y%m%d")
+    
+    for folder_name in os.listdir(script_dir):
+        if folder_name.startswith("racing_forms_") and folder_name != f"racing_forms_{today_str}":
+            folder_path = os.path.join(script_dir, folder_name)
+            if os.path.isdir(folder_path):
+                try:
+                    shutil.rmtree(folder_path)
+                    print(f"Deleted old data folder: {folder_name}")
+                except Exception as e:
+                    print(f"Error deleting {folder_name}: {e}")
+
+
+def daily_refresh():
+    """Daily task to refresh form data - runs at 5 AM Sydney time"""
+    print(f"[{get_sydney_time()}] Starting daily data refresh...")
+    
+    # Clean up old data folders
+    cleanup_old_data()
+    
+    # Scrape new data for today
+    scrape_todays_races()
+    
+    # Reload data into memory
+    load_existing_data()
+    
+    # Notify connected clients
+    socketio.emit('data_refreshed', {'time': get_sydney_time().strftime("%H:%M:%S")})
+    
+    print(f"[{get_sydney_time()}] Daily refresh complete!")
+
+
+def scrape_todays_races():
+    """Scrape today's race meetings and odds"""
+    folder = get_data_folder()
+    os.makedirs(folder, exist_ok=True)
+    
+    print(f"Scraping today's races to {folder}...")
+    
+    try:
+        with sync_playwright() as p:
+            browser = p.firefox.launch(headless=True)
+            context = browser.new_context(
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0'
+            )
+            page = context.new_page()
+            
+            # Go to punters.com.au to get today's meetings
+            page.goto("https://www.punters.com.au/racing/", timeout=30000)
+            time.sleep(3)
+            
+            # Get all meeting links
+            meetings = []
+            meeting_links = page.query_selector_all('a[href*="/form-guide/"]')
+            
+            for link in meeting_links:
+                href = link.get_attribute('href')
+                if href and '/form-guide/' in href:
+                    meetings.append(href)
+            
+            all_odds = []
+            
+            for meeting_url in meetings[:10]:  # Limit to first 10 meetings
+                try:
+                    if not meeting_url.startswith('http'):
+                        meeting_url = f"https://www.punters.com.au{meeting_url}"
+                    
+                    page.goto(meeting_url, timeout=30000)
+                    time.sleep(2)
+                    
+                    # Extract venue name from URL
+                    venue_match = re.search(r'/form-guide/([^/]+)/', meeting_url)
+                    venue = venue_match.group(1).replace('-', ' ').title() if venue_match else 'Unknown'
+                    
+                    # Find race links
+                    race_links = page.query_selector_all('a[href*="/race-"]')
+                    
+                    for race_link in race_links:
+                        race_href = race_link.get_attribute('href')
+                        race_match = re.search(r'/race-(\d+)', race_href)
+                        if race_match:
+                            race_num = int(race_match.group(1))
+                            
+                            # Scrape odds for this race
+                            horses = scrape_race_odds_page(page, race_href)
+                            
+                            if horses:
+                                all_odds.append({
+                                    'venue': venue,
+                                    'race_number': race_num,
+                                    'horses': horses,
+                                    'url': race_href
+                                })
+                                
+                except Exception as e:
+                    print(f"Error scraping meeting: {e}")
+                    continue
+            
+            browser.close()
+            
+            # Save odds data
+            if all_odds:
+                odds_file = os.path.join(folder, "odds_data.json")
+                with open(odds_file, 'w', encoding='utf-8') as f:
+                    json.dump(all_odds, f, indent=2)
+                print(f"Saved {len(all_odds)} races to {odds_file}")
+            
+    except Exception as e:
+        print(f"Error in scrape_todays_races: {e}")
+
+
+def scrape_race_odds_page(page, race_url):
+    """Scrape odds from a specific race page"""
+    try:
+        if not race_url.startswith('http'):
+            race_url = f"https://www.punters.com.au{race_url}"
+        
+        page.goto(race_url + "#OddsComparison", timeout=30000)
+        time.sleep(2)
+        
+        try:
+            page.wait_for_selector('table.compare-odds__table', timeout=10000)
+        except:
+            return []
+        
+        # Extract bookmaker names
+        bookmaker_headers = page.query_selector_all('table.compare-odds__table thead th img')
+        bookmakers = []
+        for img in bookmaker_headers:
+            alt = img.get_attribute('alt')
+            if alt:
+                bookmakers.append(alt)
+        
+        # Extract odds
+        horses = []
+        rows = page.query_selector_all('table.compare-odds__table tbody tr.compare-odds-selection')
+        
+        for row in rows:
+            try:
+                competitor = row.query_selector('.selection-runner__competitor')
+                if not competitor:
+                    continue
+                
+                text = competitor.inner_text().strip()
+                match = re.match(r'(\d+)\.\s*(.+?)\s*\((\d+)\)', text)
+                if not match:
+                    continue
+                
+                horse_num = match.group(1)
+                horse_name = match.group(2).strip()
+                barrier = match.group(3)
+                
+                odds_cells = row.query_selector_all('.compare-odds-selection__cell')
+                horse_odds = {}
+                
+                for i, cell in enumerate(odds_cells[1:]):
+                    odds_link = cell.query_selector('a.compare-odds-selection__cell--link')
+                    if odds_link:
+                        odds_text = odds_link.inner_text().strip().replace('$', '')
+                        try:
+                            odds_float = float(odds_text)
+                            if i < len(bookmakers):
+                                horse_odds[bookmakers[i]] = odds_float
+                        except:
+                            pass
+                
+                if horse_odds:
+                    valid_odds = {k: v for k, v in horse_odds.items() if v and v < 500}
+                    if valid_odds:
+                        best_bookie = max(valid_odds, key=valid_odds.get)
+                        horses.append({
+                            'number': int(horse_num),
+                            'name': horse_name,
+                            'barrier': int(barrier),
+                            'odds': horse_odds,
+                            'best_odds': valid_odds[best_bookie],
+                            'best_bookmaker': best_bookie,
+                            'avg_odds': sum(valid_odds.values()) / len(valid_odds)
+                        })
+            except:
+                continue
+        
+        return horses
+        
+    except Exception as e:
+        print(f"Error scraping race odds: {e}")
+        return []
+
+
+# Initialize scheduler
+scheduler = BackgroundScheduler(timezone=SYDNEY_TZ)
+
+# Schedule daily refresh at 5:00 AM Sydney time
+scheduler.add_job(
+    daily_refresh,
+    CronTrigger(hour=5, minute=0, timezone=SYDNEY_TZ),
+    id='daily_refresh',
+    replace_existing=True
+)
 
 
 def load_existing_data():
@@ -587,6 +805,40 @@ def get_race_detail(venue, race_number):
     })
 
 
+@app.route('/api/scrape_now', methods=['POST'])
+def trigger_scrape():
+    """Manually trigger a data refresh"""
+    def run_scrape():
+        daily_refresh()
+    
+    thread = threading.Thread(target=run_scrape, daemon=True)
+    thread.start()
+    
+    return jsonify({
+        'status': 'started',
+        'message': 'Scraping started in background. Data will refresh shortly.'
+    })
+
+
+@app.route('/api/status')
+def get_status():
+    """Get current system status"""
+    sydney_now = get_sydney_time()
+    folder = get_data_folder()
+    
+    return jsonify({
+        'sydney_time': sydney_now.strftime("%Y-%m-%d %H:%M:%S"),
+        'data_folder': folder,
+        'folder_exists': os.path.exists(folder),
+        'races_loaded': len(race_data['odds']),
+        'value_picks': len(race_data['value_picks']),
+        'market_edges': len(race_data['arb_opportunities']),
+        'dud_favourites': len(race_data['dud_favourites']),
+        'last_updated': race_data['last_updated'],
+        'scheduler_running': scheduler.running
+    })
+
+
 @socketio.on('connect')
 def handle_connect():
     """Handle client connection"""
@@ -600,14 +852,25 @@ def handle_subscribe_arb(data):
     pass
 
 
+# Start the scheduler
+scheduler.start()
+
 # Load data on module import for production
 load_existing_data()
+
+# If no data exists, trigger initial scrape
+if not race_data['odds']:
+    print("No data found - triggering initial scrape...")
+    threading.Thread(target=daily_refresh, daemon=True).start()
 
 
 if __name__ == '__main__':
     print("=" * 60)
     print("Racing Value Finder Web Application")
     print("=" * 60)
+    
+    print(f"\nSydney Time: {get_sydney_time().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Daily refresh scheduled for 5:00 AM Sydney time")
     
     print(f"\nLoaded {len(race_data['races'])} races with form data")
     print(f"Loaded {len(race_data['odds'])} races with odds data")
@@ -626,4 +889,3 @@ if __name__ == '__main__':
     print("=" * 60)
     
     socketio.run(app, host='0.0.0.0', port=port, debug=debug)
-
