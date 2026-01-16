@@ -245,6 +245,7 @@ def scrape_todays_races():
             
             # Extract unique meetings (group by venue)
             meetings = {}
+            abandoned_meetings = set()
             all_race_urls = []
             
             for card in race_cards:
@@ -281,13 +282,22 @@ def scrape_todays_races():
                         
                         meeting_key = f"{date}_{venue}"
                         
-                        # Check for abandoned
+                        # Check for abandoned - look at card text and parent elements
                         try:
                             card_text = card.inner_text().upper()
-                            if 'ABANDONED' in card_text:
+                            # Also check parent container for abandoned status
+                            parent = card.evaluate('el => el.closest(".event-card-container, .meeting-card, [class*=meeting]")?.innerText?.toUpperCase() || ""')
+                            
+                            if 'ABANDONED' in card_text or 'ABANDONED' in parent:
+                                abandoned_meetings.add(meeting_key)
+                                print(f"  → Skipping {venue} (ABANDONED)")
                                 continue
                         except:
                             pass
+                        
+                        # Skip if this meeting is already marked abandoned
+                        if meeting_key in abandoned_meetings:
+                            continue
                         
                         # Store the race URL
                         all_race_urls.append({
@@ -338,6 +348,9 @@ def scrape_todays_races():
                                     'url': race_info['url'],
                                     'horses': odds
                                 })
+                                print(f"    → Race {race_info['race_number']}: {len(odds)} horses")
+                            else:
+                                print(f"    → Race {race_info['race_number']}: No odds found")
                         except Exception as e:
                             print(f"  Error scraping race {race_info['race_number']}: {e}")
                     
@@ -352,10 +365,25 @@ def scrape_todays_races():
                 odds_file = os.path.join(folder, "odds_data.json")
                 with open(odds_file, 'w', encoding='utf-8') as f:
                     json.dump(all_odds, f, indent=2)
-                print(f"Saved {len(all_odds)} races to {odds_file}")
+                print(f"✓ Saved {len(all_odds)} races to {odds_file}")
+                
+                # Verify file was saved
+                if os.path.exists(odds_file):
+                    file_size = os.path.getsize(odds_file)
+                    print(f"✓ File verified: {file_size} bytes")
+                else:
+                    print("✗ File not found after save!")
+            else:
+                print("✗ No odds data collected to save")
+            
+            # Log abandoned meetings
+            if abandoned_meetings:
+                print(f"Skipped {len(abandoned_meetings)} abandoned meetings: {list(abandoned_meetings)}")
             
     except Exception as e:
         print(f"Error in scrape_todays_races: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def scrape_race_odds_page(page, race_url):
