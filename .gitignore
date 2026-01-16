@@ -16,7 +16,6 @@ nosetests.xml
 coverage.xml
 *.cover
 *.log
-.git
 .mypy_cache
 .pytest_cache
 .hypothesis
@@ -36,3 +35,14 @@ odds_comparison.csv
 value_bets.csv
 form_analysis.csv
 *.pdf
+
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env
+.env.local
+
+# Playwright browsers (installed at runtime)
+playwright-browsers/

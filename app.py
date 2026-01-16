@@ -600,23 +600,30 @@ def handle_subscribe_arb(data):
     pass
 
 
+# Load data on module import for production
+load_existing_data()
+
+
 if __name__ == '__main__':
     print("=" * 60)
     print("Racing Value Finder Web Application")
     print("=" * 60)
     
-    # Load existing data on startup
-    load_existing_data()
-    
     print(f"\nLoaded {len(race_data['races'])} races with form data")
     print(f"Loaded {len(race_data['odds'])} races with odds data")
     print(f"Found {len(race_data['value_picks'])} value picks")
-    print(f"Found {len(race_data['arb_opportunities'])} arbitrage opportunities")
+    print(f"Found {len(race_data['arb_opportunities'])} market edge opportunities")
     print(f"Found {len(race_data['dud_favourites'])} dud favourite alerts")
     
+    # Get port from environment variable for Railway/production
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('FLASK_DEBUG', 'true').lower() == 'true'
+    
     print("\n" + "=" * 60)
-    print("Starting web server...")
-    print("Open http://localhost:5000 in your browser")
+    print(f"Starting web server on port {port}...")
+    if debug:
+        print("Open http://localhost:5000 in your browser")
     print("=" * 60)
     
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+    socketio.run(app, host='0.0.0.0', port=port, debug=debug)
+

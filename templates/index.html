@@ -6,83 +6,172 @@
     <title>Racing Value Finder</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-dark: #1a1d23;
-            --bg-card: #242830;
-            --bg-card-hover: #2d323c;
-            --text-primary: #ffffff;
-            --text-secondary: #8b929a;
-            --accent-green: #00d97e;
-            --accent-red: #e63757;
-            --accent-blue: #2c7be5;
-            --accent-yellow: #f6c343;
-            --accent-purple: #6b5eae;
+            --bg-dark: #0f1419;
+            --bg-card: #1c2128;
+            --bg-card-hover: #252d38;
+            --bg-surface: #161b22;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent-green: #3fb950;
+            --accent-red: #f85149;
+            --accent-blue: #58a6ff;
+            --accent-yellow: #d29922;
+            --accent-purple: #a371f7;
+            --accent-orange: #db6d28;
+            --border-color: #30363d;
+            --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --gradient-success: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            --gradient-warning: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+            --shadow-lg: 0 8px 30px rgba(0,0,0,0.5);
+        }
+        
+        * {
+            box-sizing: border-box;
         }
         
         body {
             background: var(--bg-dark);
             color: var(--text-primary);
-            font-family: 'Segoe UI', system-ui, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             min-height: 100vh;
+            line-height: 1.6;
+        }
+        
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--bg-dark);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
         }
         
         .navbar {
-            background: var(--bg-card) !important;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            background: var(--bg-surface) !important;
+            border-bottom: 1px solid var(--border-color);
+            backdrop-filter: blur(10px);
+            padding: 1rem 0;
         }
         
         .navbar-brand {
-            font-weight: 700;
+            font-weight: 800;
             font-size: 1.5rem;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .navbar-brand i {
+            -webkit-text-fill-color: var(--accent-yellow);
         }
         
         .card {
             background: var(--bg-card);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
         }
         
         .card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--accent-blue);
         }
         
         .card-header {
-            background: transparent;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border-color);
             font-weight: 600;
+            padding: 1rem 1.25rem;
+            font-size: 0.95rem;
+        }
+        
+        .card-body {
+            padding: 1.25rem;
         }
         
         .stat-card {
             text-align: center;
-            padding: 1.5rem;
+            padding: 2rem 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--gradient-primary);
+        }
+        
+        .stat-card.success::before {
+            background: var(--gradient-success);
+        }
+        
+        .stat-card.warning::before {
+            background: linear-gradient(135deg, var(--accent-yellow) 0%, var(--accent-orange) 100%);
+        }
+        
+        .stat-card.danger::before {
+            background: var(--gradient-warning);
         }
         
         .stat-value {
-            font-size: 2.5rem;
-            font-weight: 700;
+            font-size: 3rem;
+            font-weight: 800;
+            line-height: 1;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
         
         .stat-label {
             color: var(--text-secondary);
-            font-size: 0.875rem;
+            font-size: 0.8rem;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
+            font-weight: 600;
         }
         
         .value-pick {
-            background: var(--bg-card);
-            border-radius: 8px;
-            padding: 1rem;
+            background: var(--bg-surface);
+            border-radius: 12px;
+            padding: 1.25rem;
             margin-bottom: 0.75rem;
             border-left: 4px solid var(--accent-green);
-            transition: background 0.2s;
+            transition: all 0.2s ease;
+            cursor: pointer;
         }
         
         .value-pick:hover {
             background: var(--bg-card-hover);
+            transform: translateX(4px);
         }
         
         .dud-alert {
@@ -95,42 +184,62 @@
         }
         
         .arb-card.active {
-            animation: pulse 2s infinite;
+            animation: glow 2s ease-in-out infinite;
         }
         
-        @keyframes pulse {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(246, 195, 67, 0.4); }
-            50% { box-shadow: 0 0 0 10px rgba(246, 195, 67, 0); }
+        @keyframes glow {
+            0%, 100% { 
+                box-shadow: 0 0 5px rgba(210, 153, 34, 0.3),
+                            0 0 10px rgba(210, 153, 34, 0.2);
+            }
+            50% { 
+                box-shadow: 0 0 15px rgba(210, 153, 34, 0.5),
+                            0 0 25px rgba(210, 153, 34, 0.3);
+            }
         }
         
         .edge-badge {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
+            display: inline-flex;
+            align-items: center;
+            padding: 0.35rem 0.75rem;
+            border-radius: 20px;
             font-size: 0.75rem;
             font-weight: 600;
+            gap: 0.25rem;
         }
         
         .edge-positive {
-            background: rgba(0, 217, 126, 0.2);
+            background: rgba(63, 185, 80, 0.15);
             color: var(--accent-green);
+            border: 1px solid rgba(63, 185, 80, 0.3);
         }
         
         .edge-negative {
-            background: rgba(230, 55, 87, 0.2);
+            background: rgba(248, 81, 73, 0.15);
             color: var(--accent-red);
+            border: 1px solid rgba(248, 81, 73, 0.3);
         }
         
         .odds-badge {
-            background: var(--accent-blue);
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
             color: white;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-weight: 600;
+            padding: 0.35rem 0.75rem;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            display: inline-block;
         }
         
         .star-rating {
             color: var(--accent-yellow);
+            letter-spacing: 2px;
+        }
+        
+        .btn {
+            border-radius: 10px;
+            font-weight: 600;
+            padding: 0.5rem 1rem;
+            transition: all 0.2s ease;
         }
         
         .btn-primary {
@@ -139,12 +248,19 @@
         }
         
         .btn-primary:hover {
-            background: #1a68d1;
+            background: #4393eb;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(88, 166, 255, 0.4);
         }
         
         .btn-success {
             background: var(--accent-green);
             border: none;
+        }
+        
+        .btn-success:hover {
+            background: #2ea043;
+            transform: translateY(-2px);
         }
         
         .btn-warning {
@@ -153,17 +269,43 @@
             color: #000;
         }
         
+        .btn-warning:hover {
+            background: #e5a722;
+            transform: translateY(-2px);
+        }
+        
+        .btn-outline-light {
+            border-color: var(--border-color);
+            color: var(--text-secondary);
+        }
+        
+        .btn-outline-light:hover {
+            background: var(--bg-card);
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+        
         .form-control, .form-select {
-            background: var(--bg-dark);
-            border: 1px solid rgba(255,255,255,0.2);
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
             color: var(--text-primary);
+            border-radius: 10px;
+            padding: 0.65rem 1rem;
+            transition: all 0.2s ease;
         }
         
         .form-control:focus, .form-select:focus {
-            background: var(--bg-dark);
+            background: var(--bg-card);
             border-color: var(--accent-blue);
             color: var(--text-primary);
-            box-shadow: 0 0 0 0.2rem rgba(44, 123, 229, 0.25);
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
+        }
+        
+        .form-label {
+            font-weight: 500;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
         }
         
         .table {
@@ -171,31 +313,47 @@
         }
         
         .table thead th {
-            border-bottom: 2px solid rgba(255,255,255,0.2);
-            color: var(--text-secondary);
+            border-bottom: 2px solid var(--border-color);
+            color: var(--text-muted);
             font-weight: 600;
             text-transform: uppercase;
-            font-size: 0.75rem;
-            letter-spacing: 0.5px;
+            font-size: 0.7rem;
+            letter-spacing: 1px;
+            padding: 1rem 0.75rem;
         }
         
         .table td {
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            border-bottom: 1px solid var(--border-color);
             vertical-align: middle;
+            padding: 0.875rem 0.75rem;
+        }
+        
+        .table tbody tr {
+            transition: background 0.2s ease;
+        }
+        
+        .table tbody tr:hover {
+            background: var(--bg-surface);
         }
         
         .horse-name {
             font-weight: 600;
+            color: var(--text-primary);
         }
         
         .bookmaker-tag {
             font-size: 0.7rem;
-            color: var(--text-secondary);
+            color: var(--text-muted);
+            background: var(--bg-surface);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            display: inline-block;
         }
         
         .nav-pills .nav-link {
             color: var(--text-secondary);
-            border-radius: 8px;
+            border-radius: 10px;
+            padding: 0.5rem 1rem;
         }
         
         .nav-pills .nav-link.active {
@@ -204,26 +362,39 @@
         }
         
         .progress {
-            height: 8px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 4px;
+            height: 6px;
+            background: var(--bg-surface);
+            border-radius: 3px;
+            overflow: hidden;
         }
         
         .progress-bar {
-            border-radius: 4px;
+            border-radius: 3px;
+            background: var(--gradient-primary);
         }
         
         .modal-content {
             background: var(--bg-card);
-            border: 1px solid rgba(255,255,255,0.1);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
         }
         
         .modal-header {
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1.25rem 1.5rem;
+        }
+        
+        .modal-body {
+            padding: 1.5rem;
         }
         
         .modal-footer {
-            border-top: 1px solid rgba(255,255,255,0.1);
+            border-top: 1px solid var(--border-color);
+            padding: 1rem 1.5rem;
+        }
+        
+        .modal-title {
+            font-weight: 700;
         }
         
         .loading-spinner {
@@ -235,8 +406,15 @@
         }
         
         .refresh-time {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .refresh-time i {
+            color: var(--accent-green);
         }
         
         .monitoring-badge {
@@ -245,25 +423,29 @@
             right: -8px;
             background: var(--accent-green);
             color: white;
-            padding: 0.25rem 0.5rem;
-            border-radius: 12px;
-            font-size: 0.7rem;
-            font-weight: 600;
+            padding: 0.3rem 0.6rem;
+            border-radius: 20px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 8px rgba(63, 185, 80, 0.4);
         }
         
         .dutch-result {
-            background: var(--bg-dark);
-            border-radius: 8px;
-            padding: 1rem;
+            background: var(--bg-surface);
+            border-radius: 12px;
+            padding: 1.25rem;
             margin-top: 1rem;
+            border: 1px solid var(--border-color);
         }
         
         .stake-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--border-color);
         }
         
         .stake-row:last-child {
@@ -272,18 +454,21 @@
         
         .profit-positive {
             color: var(--accent-green);
+            font-weight: 600;
         }
         
         .profit-negative {
             color: var(--accent-red);
+            font-weight: 600;
         }
         
         .venue-header {
-            background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            margin-bottom: 0.5rem;
-            font-weight: 600;
+            background: var(--gradient-primary);
+            padding: 0.625rem 1.25rem;
+            border-radius: 10px;
+            margin-bottom: 0.75rem;
+            font-weight: 700;
+            font-size: 0.9rem;
         }
         
         #toast-container {
@@ -295,58 +480,111 @@
         
         .toast {
             background: var(--bg-card);
-            border: 1px solid rgba(255,255,255,0.1);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .toast-header {
+            border-radius: 12px 12px 0 0;
+        }
+        
+        .form-check-input {
+            background-color: var(--bg-surface);
+            border-color: var(--border-color);
         }
         
         .form-check-input:checked {
             background-color: var(--accent-blue);
             border-color: var(--accent-blue);
         }
+        
+        .form-check-input:focus {
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
+        }
+        
+        .badge {
+            font-weight: 600;
+            padding: 0.4em 0.8em;
+            border-radius: 6px;
+        }
+        
+        /* Hero section for empty states */
+        .empty-state {
+            text-align: center;
+            padding: 3rem 2rem;
+        }
+        
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+        
+        .empty-state p {
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+        
+        .empty-state small {
+            color: var(--text-muted);
+        }
+        
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .value-pick, .card {
+            animation: fadeIn 0.3s ease-out;
+        }
     </style>
 </head>
 <body>
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
-        <div class="container-fluid">
+        <div class="container-fluid px-4">
             <a class="navbar-brand" href="#">
-                <i class="bi bi-trophy-fill text-warning me-2"></i>
+                <i class="bi bi-trophy-fill"></i>
                 Racing Value Finder
             </a>
-            <div class="d-flex align-items-center">
-                <span class="refresh-time me-3">
-                    Last updated: <span id="lastUpdated">--:--:--</span>
+            <div class="d-flex align-items-center gap-3">
+                <span class="refresh-time">
+                    <i class="bi bi-broadcast-pin"></i>
+                    <span>Updated: <strong id="lastUpdated">--:--:--</strong></span>
                 </span>
                 <button class="btn btn-outline-light btn-sm" onclick="refreshData()">
-                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                    <i class="bi bi-arrow-clockwise me-1"></i> Refresh
                 </button>
             </div>
         </div>
     </nav>
 
-    <div class="container-fluid py-4">
+    <div class="container-fluid px-4 py-4">
         <!-- Stats Row -->
         <div class="row g-4 mb-4">
-            <div class="col-md-3 col-sm-6">
+            <div class="col-lg-3 col-md-6">
                 <div class="card stat-card">
-                    <div class="stat-value text-primary" id="totalRaces">0</div>
+                    <div class="stat-value" id="totalRaces">0</div>
                     <div class="stat-label">Races Analyzed</div>
                 </div>
             </div>
-            <div class="col-md-3 col-sm-6">
-                <div class="card stat-card">
-                    <div class="stat-value text-success" id="valuePicks">0</div>
+            <div class="col-lg-3 col-md-6">
+                <div class="card stat-card success">
+                    <div class="stat-value" id="valuePicks">0</div>
                     <div class="stat-label">Value Picks</div>
                 </div>
             </div>
-            <div class="col-md-3 col-sm-6">
-                <div class="card stat-card">
-                    <div class="stat-value text-warning" id="arbCount">0</div>
-                    <div class="stat-label">Arb Opportunities</div>
+            <div class="col-lg-3 col-md-6">
+                <div class="card stat-card warning">
+                    <div class="stat-value" id="arbCount">0</div>
+                    <div class="stat-label">Market Edges</div>
                 </div>
             </div>
-            <div class="col-md-3 col-sm-6">
-                <div class="card stat-card">
-                    <div class="stat-value text-danger" id="dudCount">0</div>
+            <div class="col-lg-3 col-md-6">
+                <div class="card stat-card danger">
+                    <div class="stat-value" id="dudCount">0</div>
                     <div class="stat-label">Dud Favourites</div>
                 </div>
             </div>
@@ -355,16 +593,17 @@
         <!-- Main Content -->
         <div class="row g-4">
             <!-- Left Column - Value Picks & Duds -->
-            <div class="col-lg-6">
+            <div class="col-xl-6">
                 <!-- Value Picks -->
                 <div class="card mb-4">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-gem text-success me-2"></i>Value Picks</span>
+                        <span><i class="bi bi-gem me-2" style="color: var(--accent-green);"></i>Value Picks</span>
                         <span class="badge bg-success" id="valuePicksBadge">0</span>
                     </div>
-                    <div class="card-body" id="valuePicksContainer" style="max-height: 400px; overflow-y: auto;">
-                        <div class="text-center text-secondary py-4">
-                            <i class="bi bi-hourglass-split"></i> Loading...
+                    <div class="card-body" id="valuePicksContainer" style="max-height: 450px; overflow-y: auto;">
+                        <div class="empty-state">
+                            <i class="bi bi-hourglass-split"></i>
+                            <p>Loading value picks...</p>
                         </div>
                     </div>
                 </div>
@@ -372,28 +611,30 @@
                 <!-- Dud Favourites -->
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-exclamation-triangle text-danger me-2"></i>Dud Favourite Alerts</span>
+                        <span><i class="bi bi-exclamation-triangle me-2" style="color: var(--accent-red);"></i>Dud Favourite Alerts</span>
                         <span class="badge bg-danger" id="dudBadge">0</span>
                     </div>
-                    <div class="card-body" id="dudContainer" style="max-height: 300px; overflow-y: auto;">
-                        <div class="text-center text-secondary py-4">
-                            <i class="bi bi-hourglass-split"></i> Loading...
+                    <div class="card-body" id="dudContainer" style="max-height: 350px; overflow-y: auto;">
+                        <div class="empty-state">
+                            <i class="bi bi-hourglass-split"></i>
+                            <p>Loading alerts...</p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Right Column - Arb & Dutch Calculator -->
-            <div class="col-lg-6">
-                <!-- Arbitrage Opportunities -->
+            <!-- Right Column - Market Edges & Dutch Calculator -->
+            <div class="col-xl-6">
+                <!-- Market Edge Opportunities -->
                 <div class="card mb-4">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-cash-stack text-warning me-2"></i>Arbitrage Opportunities</span>
+                        <span><i class="bi bi-graph-up-arrow me-2" style="color: var(--accent-yellow);"></i>Market Edge Opportunities</span>
                         <span class="badge bg-warning text-dark" id="arbBadge">0</span>
                     </div>
-                    <div class="card-body" id="arbContainer" style="max-height: 350px; overflow-y: auto;">
-                        <div class="text-center text-secondary py-4">
-                            <i class="bi bi-hourglass-split"></i> Loading...
+                    <div class="card-body" id="arbContainer" style="max-height: 400px; overflow-y: auto;">
+                        <div class="empty-state">
+                            <i class="bi bi-hourglass-split"></i>
+                            <p>Scanning markets...</p>
                         </div>
                     </div>
                 </div>
@@ -401,7 +642,7 @@
                 <!-- Dutch Calculator -->
                 <div class="card">
                     <div class="card-header">
-                        <i class="bi bi-calculator text-primary me-2"></i>Dutching Calculator
+                        <i class="bi bi-calculator me-2" style="color: var(--accent-blue);"></i>Dutching Calculator
                     </div>
                     <div class="card-body">
                         <div class="row g-3 mb-3">
@@ -424,7 +665,7 @@
                         </div>
                         
                         <div id="dutchHorsesContainer" class="mb-3" style="max-height: 200px; overflow-y: auto;">
-                            <p class="text-secondary text-center">Select a race to see horses</p>
+                            <p class="text-secondary text-center py-3">Select a race to see horses</p>
                         </div>
                         
                         <button class="btn btn-primary w-100" onclick="calculateDutch()">
@@ -441,12 +682,13 @@
         <div class="row mt-4">
             <div class="col-12">
                 <div class="card">
-                    <div class="card-header">
-                        <i class="bi bi-list-ul me-2"></i>All Races
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-list-columns me-2"></i>All Races</span>
+                        <small class="text-muted">Click a row to view details</small>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body p-0">
                         <div class="table-responsive">
-                            <table class="table table-hover" id="racesTable">
+                            <table class="table table-hover mb-0" id="racesTable">
                                 <thead>
                                     <tr>
                                         <th>Venue</th>
@@ -470,7 +712,7 @@
 
     <!-- Race Detail Modal -->
     <div class="modal fade" id="raceModal" tabindex="-1">
-        <div class="modal-dialog modal-xl">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="raceModalTitle">Race Details</h5>
@@ -520,7 +762,7 @@
             
             socket.on('arb_update', function(data) {
                 updateArbOpportunity(data);
-                showToast('Arb Updated', `${data.venue} R${data.race_number}: ${data.status}`, 
+                showToast('Market Update', `${data.venue} R${data.race_number}: ${data.status}`, 
                     data.status === 'active' ? 'success' : 'warning');
             });
         }
@@ -568,35 +810,42 @@
             
             if (!appData.value_picks || appData.value_picks.length === 0) {
                 container.innerHTML = `
-                    <div class="text-center text-secondary py-4">
-                        <i class="bi bi-search" style="font-size: 2rem;"></i>
-                        <p class="mt-2">No value picks found today</p>
+                    <div class="empty-state">
+                        <i class="bi bi-search"></i>
+                        <p>No value picks found today</p>
+                        <small>Check back when more races are analyzed</small>
                     </div>`;
                 return;
             }
             
             let html = '';
-            appData.value_picks.forEach(pick => {
+            appData.value_picks.forEach((pick, index) => {
                 const stars = '★'.repeat(pick.value_rating) + '☆'.repeat(5 - pick.value_rating);
+                const delay = index * 50;
                 html += `
-                    <div class="value-pick" onclick="viewRace('${pick.venue}', ${pick.race_number})">
+                    <div class="value-pick" onclick="viewRace('${pick.venue}', ${pick.race_number})" style="animation-delay: ${delay}ms;">
                         <div class="d-flex justify-content-between align-items-start">
                             <div>
-                                <span class="text-secondary">${pick.venue} R${pick.race_number}</span>
-                                <h6 class="horse-name mb-1">${pick.horse}</h6>
-                                <small class="bookmaker-tag">Best at ${pick.best_at}</small>
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="badge bg-secondary" style="font-size: 0.7rem;">${pick.venue}</span>
+                                    <span class="text-muted" style="font-size: 0.8rem;">Race ${pick.race_number}</span>
+                                </div>
+                                <h6 class="horse-name mb-2">${pick.horse}</h6>
+                                <span class="bookmaker-tag"><i class="bi bi-shop me-1"></i>${pick.best_at}</span>
                             </div>
                             <div class="text-end">
                                 <span class="odds-badge">$${pick.best_odds.toFixed(2)}</span>
-                                <div class="mt-1">
-                                    <span class="edge-badge edge-positive">+${(pick.edge * 100).toFixed(1)}% edge</span>
+                                <div class="mt-2">
+                                    <span class="edge-badge edge-positive">
+                                        <i class="bi bi-arrow-up-short"></i>+${(pick.edge * 100).toFixed(1)}%
+                                    </span>
                                 </div>
                             </div>
                         </div>
-                        <div class="mt-2 d-flex justify-content-between align-items-center">
-                            <div>
-                                <small class="text-secondary">Fair: $${pick.fair_odds}</small>
-                                <small class="text-secondary ms-2">Win: ${(pick.model_prob * 100).toFixed(0)}%</small>
+                        <div class="mt-3 pt-2 d-flex justify-content-between align-items-center" style="border-top: 1px solid var(--border-color);">
+                            <div class="d-flex gap-3">
+                                <small class="text-muted"><i class="bi bi-bullseye me-1"></i>Fair: $${pick.fair_odds}</small>
+                                <small class="text-muted"><i class="bi bi-percent me-1"></i>Win: ${(pick.model_prob * 100).toFixed(0)}%</small>
                             </div>
                             <span class="star-rating">${stars}</span>
                         </div>
@@ -611,35 +860,42 @@
             
             if (!appData.dud_favourites || appData.dud_favourites.length === 0) {
                 container.innerHTML = `
-                    <div class="text-center text-secondary py-4">
-                        <i class="bi bi-shield-check" style="font-size: 2rem;"></i>
-                        <p class="mt-2">No dud favourites detected</p>
+                    <div class="empty-state">
+                        <i class="bi bi-shield-check"></i>
+                        <p>No dud favourites detected</p>
+                        <small>All favourites look solid today</small>
                     </div>`;
                 return;
             }
             
             let html = '';
-            appData.dud_favourites.forEach(dud => {
+            appData.dud_favourites.forEach((dud, index) => {
+                const delay = index * 50;
                 html += `
-                    <div class="value-pick dud-alert" onclick="viewRace('${dud.venue}', ${dud.race_number})">
+                    <div class="value-pick dud-alert" onclick="viewRace('${dud.venue}', ${dud.race_number})" style="animation-delay: ${delay}ms;">
                         <div class="d-flex justify-content-between align-items-start">
                             <div>
-                                <span class="text-secondary">${dud.venue} R${dud.race_number}</span>
-                                <h6 class="horse-name mb-1 text-danger">
-                                    <i class="bi bi-exclamation-circle me-1"></i>${dud.favourite}
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="badge bg-secondary" style="font-size: 0.7rem;">${dud.venue}</span>
+                                    <span class="text-muted" style="font-size: 0.8rem;">Race ${dud.race_number}</span>
+                                </div>
+                                <h6 class="horse-name mb-1" style="color: var(--accent-red);">
+                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>${dud.favourite}
                                 </h6>
-                                <small class="text-secondary">Favourite @ $${dud.odds.toFixed(2)}</small>
+                                <span class="bookmaker-tag">Favourite @ $${dud.odds.toFixed(2)}</span>
                             </div>
                             <div class="text-end">
-                                <span class="edge-badge edge-negative">${(dud.edge * 100).toFixed(1)}% edge</span>
+                                <span class="edge-badge edge-negative">
+                                    <i class="bi bi-arrow-down-short"></i>${(dud.edge * 100).toFixed(1)}%
+                                </span>
                             </div>
                         </div>
-                        <div class="mt-2">
-                            <small class="text-secondary">Model: ${(dud.model_prob * 100).toFixed(0)}%</small>
-                            <small class="text-secondary ms-2">Market: ${(dud.implied_prob * 100).toFixed(0)}%</small>
-                        </div>
-                        <div class="mt-1">
-                            <small class="text-success">Better picks: ${dud.better_picks.join(', ')}</small>
+                        <div class="mt-3 pt-2" style="border-top: 1px solid var(--border-color);">
+                            <div class="d-flex gap-3 mb-2">
+                                <small class="text-muted">Model: ${(dud.model_prob * 100).toFixed(0)}%</small>
+                                <small class="text-muted">Market: ${(dud.implied_prob * 100).toFixed(0)}%</small>
+                            </div>
+                            <small style="color: var(--accent-green);"><i class="bi bi-lightbulb me-1"></i>Consider: ${dud.better_picks.join(', ')}</small>
                         </div>
                     </div>`;
             });
@@ -652,49 +908,53 @@
             
             if (!appData.arb_opportunities || appData.arb_opportunities.length === 0) {
                 container.innerHTML = `
-                    <div class="text-center text-secondary py-4">
-                        <i class="bi bi-graph-up" style="font-size: 2rem;"></i>
-                        <p class="mt-2">No arbitrage opportunities found</p>
+                    <div class="empty-state">
+                        <i class="bi bi-graph-up-arrow"></i>
+                        <p>No market edges found</p>
                         <small>Markets are efficient - keep checking!</small>
                     </div>`;
                 return;
             }
             
             let html = '';
-            appData.arb_opportunities.forEach(arb => {
+            appData.arb_opportunities.forEach((arb, index) => {
                 const statusClass = arb.status === 'active' ? 'active' : '';
+                const delay = index * 50;
                 html += `
-                    <div class="value-pick arb-card ${statusClass}" id="arb-${arb.venue}-${arb.race_number}">
+                    <div class="value-pick arb-card ${statusClass}" id="arb-${arb.venue}-${arb.race_number}" style="animation-delay: ${delay}ms;">
                         <div class="d-flex justify-content-between align-items-start">
                             <div>
-                                <span class="text-secondary">${arb.venue} R${arb.race_number}</span>
-                                <h6 class="mb-1 text-warning">
-                                    <i class="bi bi-lightning-fill me-1"></i>
-                                    ${arb.guaranteed_profit_pct.toFixed(2)}% Guaranteed Profit
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="badge bg-secondary" style="font-size: 0.7rem;">${arb.venue}</span>
+                                    <span class="text-muted" style="font-size: 0.8rem;">Race ${arb.race_number}</span>
+                                </div>
+                                <h6 class="mb-2" style="color: var(--accent-yellow);">
+                                    <i class="bi bi-lightning-charge-fill me-1"></i>
+                                    ${arb.guaranteed_profit_pct.toFixed(2)}% Edge
                                 </h6>
-                                <small class="text-secondary">Field: ${arb.field_size} runners</small>
+                                <span class="bookmaker-tag"><i class="bi bi-people me-1"></i>${arb.field_size} runners</span>
                             </div>
                             <div class="text-end">
-                                <span class="badge ${arb.status === 'active' ? 'bg-success' : 'bg-secondary'}">
+                                <span class="badge ${arb.status === 'active' ? 'bg-success' : 'bg-secondary'}" style="text-transform: capitalize;">
                                     ${arb.status}
                                 </span>
                             </div>
                         </div>
-                        <div class="mt-2 d-flex justify-content-between align-items-center">
-                            <small class="text-secondary">Dutch book: ${arb.dutch_book.toFixed(4)}</small>
-                            <small class="text-secondary">Checked: ${arb.last_checked}</small>
+                        <div class="mt-3 pt-2 d-flex justify-content-between align-items-center" style="border-top: 1px solid var(--border-color);">
+                            <small class="text-muted"><i class="bi bi-book me-1"></i>Book: ${arb.dutch_book.toFixed(4)}</small>
+                            <small class="text-muted"><i class="bi bi-clock me-1"></i>${arb.last_checked}</small>
                         </div>
-                        <div class="mt-2 d-flex gap-2">
+                        <div class="mt-3 d-flex gap-2">
                             <button class="btn btn-sm btn-primary flex-grow-1" 
-                                onclick="viewRace('${arb.venue}', ${arb.race_number})">
+                                onclick="event.stopPropagation(); viewRace('${arb.venue}', ${arb.race_number})">
                                 <i class="bi bi-eye me-1"></i>View
                             </button>
                             <button class="btn btn-sm btn-warning flex-grow-1"
-                                onclick="startArbMonitor('${arb.venue}', ${arb.race_number}, '${arb.url}')">
+                                onclick="event.stopPropagation(); startArbMonitor('${arb.venue}', ${arb.race_number}, '${arb.url}')">
                                 <i class="bi bi-broadcast me-1"></i>Monitor
                             </button>
                             <button class="btn btn-sm btn-success flex-grow-1"
-                                onclick="dutchArb('${arb.venue}', ${arb.race_number})">
+                                onclick="event.stopPropagation(); dutchArb('${arb.venue}', ${arb.race_number})">
                                 <i class="bi bi-calculator me-1"></i>Dutch
                             </button>
                         </div>
@@ -708,7 +968,7 @@
             const tbody = document.getElementById('racesTableBody');
             
             if (!appData.odds || appData.odds.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-secondary">No races loaded</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No races loaded</td></tr>';
                 return;
             }
             
@@ -741,22 +1001,31 @@
                         topPick = sorted[0]?.name || '-';
                     }
                     
+                    const hasEdge = dutchBook < 1;
+                    
                     html += `
                         <tr onclick="viewRace('${venue}', ${race.race_number})" style="cursor: pointer;">
-                            <td><strong>${venue}</strong></td>
-                            <td>R${race.race_number}</td>
+                            <td>
+                                <span class="fw-semibold">${venue}</span>
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary">R${race.race_number}</span>
+                            </td>
                             <td>${validHorses.length}</td>
                             <td>
-                                <span class="${dutchBook < 1 ? 'text-success' : ''}">${overround}%</span>
-                                ${dutchBook < 1 ? '<i class="bi bi-lightning-fill text-warning ms-1"></i>' : ''}
+                                <span class="${hasEdge ? 'profit-positive' : 'text-muted'}">${overround}%</span>
+                                ${hasEdge ? '<i class="bi bi-lightning-charge-fill ms-1" style="color: var(--accent-yellow);"></i>' : ''}
                             </td>
-                            <td>${topPick.substring(0, 15)}</td>
+                            <td class="text-truncate" style="max-width: 120px;">${topPick}</td>
                             <td>
-                                ${favourite ? `${favourite.name.substring(0, 12)} <span class="odds-badge">$${favourite.best_odds}</span>` : '-'}
+                                ${favourite ? `
+                                    <span class="text-truncate d-inline-block" style="max-width: 100px; vertical-align: middle;">${favourite.name}</span>
+                                    <span class="odds-badge ms-1">$${favourite.best_odds.toFixed(2)}</span>
+                                ` : '<span class="text-muted">-</span>'}
                             </td>
                             <td>
                                 <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); viewRace('${venue}', ${race.race_number})">
-                                    <i class="bi bi-eye"></i>
+                                    <i class="bi bi-chevron-right"></i>
                                 </button>
                             </td>
                         </tr>`;
@@ -879,11 +1148,11 @@
                     <div class="stake-row">
                         <div>
                             <strong>${s.name}</strong>
-                            <small class="text-secondary ms-2">@ $${s.odds}</small>
-                            <span class="bookmaker-tag d-block">${s.bookmaker}</span>
+                            <small class="text-muted ms-2">@ $${s.odds.toFixed(2)}</small>
+                            <span class="bookmaker-tag d-block mt-1"><i class="bi bi-shop me-1"></i>${s.bookmaker}</span>
                         </div>
                         <div class="text-end">
-                            <div><strong>$${s.stake.toFixed(2)}</strong></div>
+                            <div class="fw-bold">$${s.stake.toFixed(2)}</div>
                             <small class="${s.profit_if_wins >= 0 ? 'profit-positive' : 'profit-negative'}">
                                 ${s.profit_if_wins >= 0 ? '+' : ''}$${s.profit_if_wins.toFixed(2)}
                             </small>
@@ -893,34 +1162,46 @@
             
             container.innerHTML = `
                 <div class="dutch-result">
-                    <div class="d-flex justify-content-between mb-3">
+                    <div class="d-flex justify-content-between align-items-start mb-3 pb-3" style="border-bottom: 1px solid var(--border-color);">
                         <div>
-                            <h6 class="mb-0">${result.venue} R${result.race_number}</h6>
-                            <small class="text-secondary">Bankroll: $${result.bankroll}</small>
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <span class="badge bg-secondary">${result.venue}</span>
+                                <span class="text-muted">Race ${result.race_number}</span>
+                            </div>
+                            <small class="text-muted"><i class="bi bi-wallet2 me-1"></i>Bankroll: $${result.bankroll}</small>
                         </div>
                         <div class="text-end">
                             ${result.is_arb ? 
-                                `<span class="badge bg-success">ARBITRAGE</span>
+                                `<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>EDGE FOUND</span>
                                  <div class="profit-positive mt-1">
-                                    +$${result.guaranteed_profit.toFixed(2)} guaranteed
+                                    <i class="bi bi-plus-circle me-1"></i>$${result.guaranteed_profit.toFixed(2)} profit
                                  </div>` :
                                 `<span class="badge bg-secondary">Overround: ${result.overround_pct}%</span>`
                             }
                         </div>
                     </div>
                     
-                    <div class="mb-3">
-                        <small class="text-secondary">Dutch Book: ${result.dutch_book.toFixed(4)}</small>
-                        <span class="ms-3 ${result.roi >= 0 ? 'profit-positive' : 'profit-negative'}">
-                            ROI: ${result.roi >= 0 ? '+' : ''}${result.roi.toFixed(1)}%
-                        </span>
+                    <div class="d-flex gap-4 mb-3">
+                        <div>
+                            <small class="text-muted d-block">Dutch Book</small>
+                            <span class="fw-semibold">${result.dutch_book.toFixed(4)}</span>
+                        </div>
+                        <div>
+                            <small class="text-muted d-block">Expected ROI</small>
+                            <span class="${result.roi >= 0 ? 'profit-positive' : 'profit-negative'} fw-semibold">
+                                ${result.roi >= 0 ? '+' : ''}${result.roi.toFixed(1)}%
+                            </span>
+                        </div>
                     </div>
                     
-                    <h6 class="text-secondary mb-2">Stakes</h6>
+                    <h6 class="text-muted mb-3" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px;">
+                        <i class="bi bi-list-check me-1"></i>Recommended Stakes
+                    </h6>
                     ${stakesHtml}
                     
-                    <div class="mt-3 text-end">
-                        <strong>Total: $${result.total_stake.toFixed(2)}</strong>
+                    <div class="mt-3 pt-3 text-end" style="border-top: 1px solid var(--border-color);">
+                        <span class="text-muted me-2">Total Investment:</span>
+                        <strong class="fs-5">$${result.total_stake.toFixed(2)}</strong>
                     </div>
                 </div>`;
         }
@@ -932,32 +1213,35 @@
                 
                 currentRace = race;
                 
-                document.getElementById('raceModalTitle').textContent = 
-                    `${venue} - Race ${raceNum}: ${race.race_name}`;
+                document.getElementById('raceModalTitle').innerHTML = `
+                    <i class="bi bi-flag-fill me-2" style="color: var(--accent-blue);"></i>
+                    ${venue} - Race ${raceNum}${race.race_name ? ': ' + race.race_name : ''}
+                `;
                 
                 let tableHtml = `
-                    <div class="mb-3">
-                        <span class="badge bg-primary">Field: ${race.field_size}</span>
-                        <span class="badge ${race.is_arb ? 'bg-success' : 'bg-secondary'} ms-2">
-                            Overround: ${race.overround_pct}%
+                    <div class="d-flex flex-wrap gap-2 mb-4">
+                        <span class="badge bg-primary"><i class="bi bi-people me-1"></i>Field: ${race.field_size}</span>
+                        <span class="badge ${race.is_arb ? 'bg-success' : 'bg-secondary'}">
+                            <i class="bi bi-percent me-1"></i>Overround: ${race.overround_pct}%
                         </span>
-                        ${race.is_arb ? '<span class="badge bg-warning text-dark ms-2">ARBITRAGE!</span>' : ''}
+                        ${race.is_arb ? '<span class="badge bg-warning text-dark"><i class="bi bi-lightning-charge me-1"></i>EDGE FOUND</span>' : ''}
                     </div>
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th><input type="checkbox" class="form-check-input" id="selectAll" 
-                                    onchange="toggleAllHorses(this)" checked></th>
-                                <th>#</th>
-                                <th>Horse</th>
-                                <th>Form</th>
-                                <th>Model %</th>
-                                <th>Best Odds</th>
-                                <th>At</th>
-                                <th>Edge</th>
-                            </tr>
-                        </thead>
-                        <tbody>`;
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px;"><input type="checkbox" class="form-check-input" id="selectAll" 
+                                        onchange="toggleAllHorses(this)" checked></th>
+                                    <th style="width: 50px;">#</th>
+                                    <th>Horse</th>
+                                    <th style="width: 80px;">Form</th>
+                                    <th style="width: 80px;">Model %</th>
+                                    <th style="width: 100px;">Best Odds</th>
+                                    <th style="width: 100px;">Bookmaker</th>
+                                    <th style="width: 80px;">Edge</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
                 
                 race.horses.forEach(h => {
                     if (!h.best_odds || h.best_odds >= 500) return;
@@ -970,20 +1254,20 @@
                         <tr>
                             <td><input type="checkbox" class="form-check-input modal-horse" 
                                 value="${h.name}" checked></td>
-                            <td>${h.number}</td>
+                            <td><span class="badge bg-secondary">${h.number}</span></td>
                             <td>
-                                <strong>${h.name}</strong>
-                                <small class="d-block text-secondary">${h.jockey || ''}</small>
+                                <strong class="d-block">${h.name}</strong>
+                                ${h.jockey ? `<small class="text-muted"><i class="bi bi-person me-1"></i>${h.jockey}</small>` : ''}
                             </td>
-                            <td><code>${h.form || '-'}</code></td>
-                            <td>${(h.model_prob * 100).toFixed(1)}%</td>
+                            <td><code style="background: var(--bg-surface); padding: 0.25rem 0.5rem; border-radius: 4px;">${h.form || '-'}</code></td>
+                            <td><span class="fw-semibold">${(h.model_prob * 100).toFixed(1)}%</span></td>
                             <td><span class="odds-badge">$${h.best_odds.toFixed(2)}</span></td>
-                            <td><small>${h.best_bookmaker}</small></td>
-                            <td><span class="edge-badge ${edgeClass}">${(edge * 100).toFixed(1)}%</span></td>
+                            <td><span class="bookmaker-tag">${h.best_bookmaker}</span></td>
+                            <td><span class="edge-badge ${edgeClass}">${edge >= 0 ? '+' : ''}${(edge * 100).toFixed(1)}%</span></td>
                         </tr>`;
                 });
                 
-                tableHtml += '</tbody></table>';
+                tableHtml += '</tbody></table></div>';
                 
                 document.getElementById('raceModalBody').innerHTML = tableHtml;
                 
@@ -1093,44 +1377,50 @@
             const statusBadge = card.querySelector('.badge');
             if (statusBadge) {
                 statusBadge.className = `badge ${arb.status === 'active' ? 'bg-success' : 'bg-secondary'}`;
-                statusBadge.textContent = arb.status;
+                statusBadge.innerHTML = `${arb.status === 'active' ? '<i class="bi bi-check-circle me-1"></i>' : ''}${arb.status}`;
             }
             
             // Update profit
             const profitEl = card.querySelector('h6');
             if (profitEl) {
                 profitEl.innerHTML = `
-                    <i class="bi bi-lightning-fill me-1"></i>
-                    ${arb.guaranteed_profit_pct.toFixed(2)}% Guaranteed Profit`;
+                    <i class="bi bi-lightning-charge-fill me-1"></i>
+                    ${arb.guaranteed_profit_pct.toFixed(2)}% Edge`;
             }
             
             // Update timestamp
             const timeEl = card.querySelector('small:last-of-type');
             if (timeEl && timeEl.textContent.includes('Checked:')) {
-                timeEl.textContent = `Checked: ${arb.last_checked}`;
+                timeEl.innerHTML = `<i class="bi bi-clock me-1"></i>${arb.last_checked}`;
             }
             
             // Visual feedback
-            card.style.transition = 'background 0.5s';
+            card.style.transition = 'all 0.5s ease';
             card.style.background = arb.status === 'active' ? 
-                'rgba(0, 217, 126, 0.1)' : 'rgba(230, 55, 87, 0.1)';
-            setTimeout(() => card.style.background = '', 1000);
+                'rgba(63, 185, 80, 0.1)' : 'rgba(248, 81, 73, 0.1)';
+            card.style.borderColor = arb.status === 'active' ? 
+                'var(--accent-green)' : 'var(--accent-red)';
+            setTimeout(() => {
+                card.style.background = '';
+                card.style.borderColor = '';
+            }, 2000);
         }
         
         function showToast(title, message, type = 'info') {
             const container = document.getElementById('toast-container');
             const id = 'toast-' + Date.now();
             
-            const bgClass = {
-                'success': 'bg-success',
-                'danger': 'bg-danger', 
-                'warning': 'bg-warning',
-                'info': 'bg-primary'
-            }[type] || 'bg-primary';
+            const config = {
+                'success': { bg: 'bg-success', icon: 'bi-check-circle-fill' },
+                'danger': { bg: 'bg-danger', icon: 'bi-x-circle-fill' }, 
+                'warning': { bg: 'bg-warning', icon: 'bi-exclamation-triangle-fill' },
+                'info': { bg: 'bg-primary', icon: 'bi-info-circle-fill' }
+            }[type] || { bg: 'bg-primary', icon: 'bi-info-circle-fill' };
             
             container.insertAdjacentHTML('beforeend', `
                 <div id="${id}" class="toast" role="alert">
-                    <div class="toast-header ${bgClass} text-white">
+                    <div class="toast-header ${config.bg} text-white">
+                        <i class="bi ${config.icon} me-2"></i>
                         <strong class="me-auto">${title}</strong>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
                     </div>
