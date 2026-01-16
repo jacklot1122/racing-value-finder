@@ -431,21 +431,28 @@ def analyze_all_data():
                     'value_rating': min(5, int(h['edge'] * 50) + 1)  # 1-5 star rating
                 })
         
-        # Check for arbitrage (dutch book < 1)
-        if dutch_book < 1.0:
+        # Check for market edge (dutch book < 1 means potentially profitable)
+        # Only flag if profit is at least 2% AND we have odds from multiple bookmakers
+        if dutch_book < 0.98:  # 2%+ profit threshold
             guaranteed_profit = (1.0 / dutch_book - 1) * 100  # As percentage
             
-            race_data['arb_opportunities'].append({
-                'venue': venue,
-                'race_number': race_num,
-                'dutch_book': dutch_book,
-                'guaranteed_profit_pct': guaranteed_profit,
-                'horses': horse_odds,
-                'field_size': len(horse_odds),
-                'url': odds_race.get('url', ''),
-                'last_checked': datetime.now().strftime("%H:%M:%S"),
-                'status': 'active'
-            })
+            # Count how many horses have odds from multiple bookmakers
+            multi_bookie_count = sum(1 for h in horse_odds if 'avg_odds' in h and h.get('avg_odds') != h.get('best_odds'))
+            
+            # Only include if we have meaningful multi-bookie data
+            if multi_bookie_count >= 3 or guaranteed_profit >= 3.0:
+                race_data['arb_opportunities'].append({
+                    'venue': venue,
+                    'race_number': race_num,
+                    'dutch_book': dutch_book,
+                    'guaranteed_profit_pct': guaranteed_profit,
+                    'horses': horse_odds,
+                    'field_size': len(horse_odds),
+                    'url': odds_race.get('url', ''),
+                    'last_checked': datetime.now().strftime("%H:%M:%S"),
+                    'status': 'active',
+                    'multi_bookie_count': multi_bookie_count
+                })
     
     # Sort value picks by edge
     race_data['value_picks'].sort(key=lambda x: x['edge'], reverse=True)
